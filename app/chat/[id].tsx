@@ -1,10 +1,11 @@
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Design } from '@/constants/design';
 import { useMessaging } from '@/context/MessagingContext';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import type { Message } from '@/types/messaging';
+import type { Conversation, Message } from '@/types/messaging';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -17,26 +18,60 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-function MessageBubble({ message, showAuthor }: { message: Message; showAuthor: boolean }) {
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
+function formatMessageClock(ts: number): string {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function HeaderAvatar({ conversation }: { conversation: Conversation }) {
+  const isGroup = conversation.type === 'group';
+  if (isGroup) {
+    return (
+      <LinearGradient
+        colors={[...conversation.avatarGradient]}
+        style={styles.headerAvatar}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}>
+        <View style={styles.headerAvatarGrid}>
+          {[0, 1, 2, 3].map((i) => (
+            <View
+              key={i}
+              style={[styles.headerAvatarCell, { backgroundColor: `rgba(255,255,255,${0.2 + i * 0.08})` }]}
+            />
+          ))}
+        </View>
+      </LinearGradient>
+    );
+  }
+  return (
+    <LinearGradient
+      colors={[...conversation.avatarGradient]}
+      style={styles.headerAvatar}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}>
+      <Text style={styles.headerAvatarLetter}>{conversation.title.slice(0, 1)}</Text>
+    </LinearGradient>
+  );
+}
+
+function MessageBubble({
+  message,
+  showAuthor,
+}: {
+  message: Message;
+  showAuthor: boolean;
+}) {
   const own = message.isOwn;
+  const time = formatMessageClock(message.sentAt);
 
   return (
     <View style={[styles.bubbleWrap, own ? styles.bubbleWrapOwn : styles.bubbleWrapOther]}>
       {!own && showAuthor && message.authorName ? (
-        <Text style={[styles.author, { color: colors.icon }]}>{message.authorName}</Text>
+        <Text style={styles.author}>{message.authorName}</Text>
       ) : null}
-      <View
-        style={[
-          styles.bubble,
-          own
-            ? { backgroundColor: Colors.light.tint }
-            : {
-                backgroundColor: colorScheme === 'dark' ? '#2c2c2e' : '#e9e9eb',
-              },
-        ]}>
-        <Text style={[styles.bubbleText, { color: own ? '#fff' : colors.text }]}>{message.text}</Text>
+      <View style={[styles.bubble, own ? styles.bubbleOwn : styles.bubbleOther]}>
+        <Text style={[styles.bubbleMsg, own ? styles.bubbleMsgOwn : styles.bubbleMsgOther]}>{message.text}</Text>
+        <Text style={[styles.bubbleTime, own ? styles.bubbleTimeOwn : styles.bubbleTimeOther]}>{time}</Text>
       </View>
     </View>
   );
@@ -48,35 +83,69 @@ export default function ChatScreen() {
   const navigation = useNavigation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme() ?? 'light';
-  const colors = Colors[colorScheme];
 
-  const { getConversation, messagesByConversation, sendMessage } = useMessaging();
+  const { getConversation, messagesByConversation, sendMessage, markConversationRead } = useMessaging();
   const conversation = id ? getConversation(id) : undefined;
   const messages = id ? messagesByConversation[id] ?? [] : [];
 
   const [draft, setDraft] = useState('');
   const listRef = useRef<FlatList<Message>>(null);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (id) markConversationRead(id);
+    }, [id, markConversationRead]),
+  );
+
   useLayoutEffect(() => {
+    if (!conversation) return;
+
+    const subtitle =
+      conversation.type === 'group'
+        ? `${conversation.memberCount ?? 3} membres`
+        : 'Message direct';
+
     navigation.setOptions({
-      title: conversation?.title ?? 'Discussion',
+      headerStyle: {
+        backgroundColor: '#0a0a0a',
+      },
+      headerShadowVisible: false,
+      headerTintColor: Design.textPrimary,
+      headerTitleAlign: 'center',
+      headerTitle: () => (
+        <View style={styles.headerTitleRow}>
+          <HeaderAvatar conversation={conversation} />
+          <View style={styles.headerTexts}>
+            <Text style={styles.headerName} numberOfLines={1}>
+              {conversation.title}
+            </Text>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          </View>
+        </View>
+      ),
       headerRight: () =>
         id ? (
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: '/sortie/nouvelle',
-                params: { conversationId: id },
-              })
-            }
-            hitSlop={12}
-            style={styles.headerBtn}>
-            <IconSymbol name="plus.circle.fill" size={26} color={colors.tint} />
-          </Pressable>
+          <View style={styles.headerRightRow}>
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/sortie/nouvelle',
+                  params: { conversationId: id },
+                })
+              }
+              hitSlop={10}
+              style={styles.headerIconBtn}>
+              <Ionicons name="add-circle-outline" size={26} color={Design.textPrimary} />
+            </Pressable>
+            <Pressable hitSlop={10} style={styles.headerIconBtn}>
+              <Ionicons name="settings-outline" size={24} color={Design.textPrimary} />
+            </Pressable>
+          </View>
         ) : null,
     });
-  }, [conversation?.title, navigation, id, router, colors.tint]);
+  }, [conversation, navigation, id, router]);
 
   const onSend = () => {
     if (!id) return;
@@ -86,15 +155,15 @@ export default function ChatScreen() {
 
   if (!id || !conversation) {
     return (
-      <View style={[styles.fallback, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.icon }}>Conversation introuvable.</Text>
+      <View style={styles.fallback}>
+        <Text style={styles.muted}>Conversation introuvable.</Text>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
       <FlatList
@@ -102,7 +171,7 @@ export default function ChatScreen() {
         data={messages}
         keyExtractor={(m) => m.id}
         contentContainerStyle={{
-          paddingHorizontal: 16,
+          paddingHorizontal: 14,
           paddingTop: 12,
           paddingBottom: 12,
           flexGrow: 1,
@@ -111,7 +180,9 @@ export default function ChatScreen() {
         renderItem={({ item, index }) => {
           const prev = index > 0 ? messages[index - 1] : undefined;
           const showAuthor =
-            conversation.type === 'group' && !item.isOwn && (!prev || prev.isOwn || prev.authorName !== item.authorName);
+            conversation.type === 'group' &&
+            !item.isOwn &&
+            (!prev || prev.isOwn || prev.authorName !== item.authorName);
           return <MessageBubble message={item} showAuthor={showAuthor} />;
         }}
       />
@@ -119,53 +190,100 @@ export default function ChatScreen() {
         style={[
           styles.inputRow,
           {
-            borderTopColor: colorScheme === 'dark' ? '#3a3a3c' : '#c6c6c8',
-            backgroundColor: colorScheme === 'dark' ? '#1c1c1e' : colors.background,
-            paddingBottom: Math.max(insets.bottom, 10),
+            paddingBottom: Math.max(insets.bottom, 12),
           },
         ]}>
         <TextInput
           value={draft}
           onChangeText={setDraft}
-          placeholder="Message…"
-          placeholderTextColor={colors.icon}
-          style={[
-            styles.input,
-            {
-              color: colors.text,
-              backgroundColor: colorScheme === 'dark' ? '#2c2c2e' : '#f2f2f7',
-            },
-          ]}
+          placeholder="Écrivez un message…"
+          placeholderTextColor="#6C6C70"
+          style={styles.input}
           multiline
           maxLength={2000}
         />
         <Pressable
           onPress={onSend}
           disabled={!draft.trim()}
-          style={[styles.sendBtn, { opacity: draft.trim() ? 1 : 0.4 }]}>
-          <IconSymbol name="paperplane.fill" size={22} color={colors.tint} />
+          style={[styles.sendCircle, !draft.trim() && styles.sendCircleDisabled]}>
+          <Ionicons name="send" size={18} color={draft.trim() ? '#fff' : '#6C6C70'} />
         </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
+const BUBBLE_RADIUS = 18;
+const BUBBLE_TAIL = 5;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Design.bg,
   },
   fallback: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: Design.bg,
   },
-  headerBtn: {
-    marginRight: 4,
+  muted: {
+    color: Design.textSecondary,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    maxWidth: 220,
+  },
+  headerAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  headerAvatarGrid: {
+    width: 26,
+    height: 26,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  headerAvatarCell: {
+    width: 13,
+    height: 13,
+  },
+  headerAvatarLetter: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  headerTexts: {
+    marginLeft: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  headerName: {
+    color: Design.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  headerSubtitle: {
+    color: Design.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  headerRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerIconBtn: {
     padding: 4,
   },
   bubbleWrap: {
-    marginBottom: 10,
-    maxWidth: '88%',
+    marginBottom: 12,
+    maxWidth: '86%',
   },
   bubbleWrapOwn: {
     alignSelf: 'flex-end',
@@ -179,35 +297,82 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 4,
     marginLeft: 4,
+    color: Design.textSecondary,
   },
   bubble: {
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
+    minWidth: 56,
   },
-  bubbleText: {
+  bubbleOwn: {
+    backgroundColor: '#FF4B6E',
+    borderTopLeftRadius: BUBBLE_RADIUS,
+    borderTopRightRadius: BUBBLE_RADIUS,
+    borderBottomLeftRadius: BUBBLE_RADIUS,
+    borderBottomRightRadius: BUBBLE_TAIL,
+  },
+  bubbleOther: {
+    backgroundColor: '#1C1C1E',
+    borderTopLeftRadius: BUBBLE_RADIUS,
+    borderTopRightRadius: BUBBLE_RADIUS,
+    borderBottomRightRadius: BUBBLE_RADIUS,
+    borderBottomLeftRadius: BUBBLE_TAIL,
+  },
+  bubbleMsg: {
     fontSize: 16,
-    lineHeight: 20,
+    lineHeight: 21,
+  },
+  bubbleMsgOwn: {
+    color: '#fff',
+  },
+  bubbleMsgOther: {
+    color: '#fff',
+  },
+  bubbleTime: {
+    fontSize: 11,
+    marginTop: 6,
+    alignSelf: 'flex-end',
+  },
+  bubbleTimeOwn: {
+    color: 'rgba(255,255,255,0.75)',
+  },
+  bubbleTimeOther: {
+    color: '#8E8E93',
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 12,
     paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 8,
+    backgroundColor: Design.bg,
+    gap: 10,
   },
   input: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 44,
     maxHeight: 120,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
     fontSize: 16,
+    color: Design.textPrimary,
+    backgroundColor: '#1C1C1E',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#333',
   },
-  sendBtn: {
-    padding: 10,
-    marginBottom: 2,
+  sendCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#1C1C1E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#333',
+  },
+  sendCircleDisabled: {
+    opacity: 0.55,
   },
 });

@@ -1,37 +1,28 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { FloatingTabBar } from '@/components/FloatingTabBar';
+import { Design } from '@/constants/design';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: true,
-        tabBarButton: HapticTab,
+        headerShown: false,
+        tabBarStyle: {
+          position: 'absolute',
+          height: 0,
+          borderTopWidth: 0,
+          backgroundColor: 'transparent',
+          elevation: 0,
+        },
+        sceneStyle: { backgroundColor: Design.bg },
       }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Messages',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="bubble.left.and.bubble.right.fill" color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="sorties"
-        options={{
-          title: 'Sorties',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar" color={color} />,
-        }}
-      />
+      <Tabs.Screen name="index" options={{ title: 'Home' }} />
+      <Tabs.Screen name="chat" options={{ title: 'Chat' }} />
+      <Tabs.Screen name="sorties" options={{ title: 'Event' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profil' }} />
     </Tabs>
   );
 }

@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
+import { Design } from '@/constants/design';
 import { MessagingProvider } from '@/context/MessagingContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -10,20 +11,35 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+const AppDarkTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: '#0a7ea4',
+    background: Design.bg,
+    card: Design.bg,
+    text: Design.textPrimary,
+    border: '#333333',
+    notification: Design.badgeRed,
+  },
+};
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const dark = colorScheme === 'dark';
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={dark ? AppDarkTheme : DefaultTheme}>
       <MessagingProvider>
-        <Stack>
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: dark ? Design.bg : undefined },
+            headerTintColor: dark ? Design.textPrimary : undefined,
+            headerTitleStyle: { fontWeight: '700' },
+            contentStyle: { backgroundColor: dark ? Design.bg : undefined },
+          }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="chat/[id]"
-            options={{
-              headerBackTitle: 'Retour',
-            }}
-          />
+          <Stack.Screen name="chat/[id]" options={{ headerBackTitle: 'Retour' }} />
           <Stack.Screen
             name="sortie/nouvelle"
             options={{
@@ -33,7 +49,7 @@ export default function RootLayout() {
             }}
           />
         </Stack>
-        <StatusBar style="auto" />
+        <StatusBar style={dark ? 'light' : 'dark'} />
       </MessagingProvider>
     </ThemeProvider>
   );
