@@ -6,7 +6,14 @@ import React, {
   useState,
 } from 'react';
 
-import type { Conversation, Message, Sortie, StoryHighlight } from '@/types/messaging';
+import type {
+  Conversation,
+  GroupChatSettings,
+  GroupMember,
+  Message,
+  Sortie,
+  StoryHighlight,
+} from '@/types/messaging';
 
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -42,7 +49,7 @@ const seedConversations: Conversation[] = [
     unreadCount: 5,
     storyBadgeCount: 5,
     avatarGradient: ['#FF7043', '#FFCA28'],
-    memberCount: 12,
+    memberCount: 5,
   },
   {
     id: 'c3',
@@ -53,7 +60,7 @@ const seedConversations: Conversation[] = [
     unreadCount: 3,
     storyBadgeCount: 3,
     avatarGradient: ['#5C6BC0', '#42A5F5'],
-    memberCount: 8,
+    memberCount: 4,
   },
   {
     id: 'c4',
@@ -63,7 +70,7 @@ const seedConversations: Conversation[] = [
     updatedAt: now - 25 * 60_000,
     unreadCount: 1,
     avatarGradient: ['#AB47BC', '#7E57C2'],
-    memberCount: 4,
+    memberCount: 3,
   },
   {
     id: 'c5',
@@ -84,6 +91,40 @@ const seedConversations: Conversation[] = [
     avatarGradient: ['#66BB6A', '#43A047'],
   },
 ];
+
+const EXTRA_MEMBER_NAMES = ['Sam', 'Julie', 'Noah', 'Chloé', 'Emma', 'Lucas', 'Zoé', 'Manon', 'Tom', 'Lina'];
+
+const GRADIENT_POOL: readonly (readonly [string, string])[] = [
+  ['#5C6BC0', '#3949AB'],
+  ['#EC407A', '#AD1457'],
+  ['#FFA726', '#F57C00'],
+  ['#26A69A', '#00897B'],
+  ['#7E57C2', '#5E35B1'],
+  ['#EF5350', '#C62828'],
+  ['#42A5F5', '#1565C0'],
+  ['#66BB6A', '#2E7D32'],
+];
+
+const seedMembersByConversation: Record<string, GroupMember[]> = {
+  c2: [
+    { id: 'c2-a', displayName: 'Antoine', isSelf: false, avatarGradient: ['#5C6BC0', '#3949AB'] },
+    { id: 'c2-b', displayName: 'Léa', isSelf: false, avatarGradient: ['#EC407A', '#AD1457'] },
+    { id: 'c2-c', displayName: 'Kevin', isSelf: false, avatarGradient: ['#FFA726', '#F57C00'] },
+    { id: 'c2-d', displayName: 'Inès', isSelf: false, avatarGradient: ['#26A69A', '#00897B'] },
+    { id: 'c2-me', displayName: 'Moi', isSelf: true, avatarGradient: ['#78909C', '#546E7A'] },
+  ],
+  c3: [
+    { id: 'c3-a', displayName: 'Léo', isSelf: false, avatarGradient: ['#7E57C2', '#5E35B1'] },
+    { id: 'c3-b', displayName: 'Camille', isSelf: false, avatarGradient: ['#FF7043', '#E64A19'] },
+    { id: 'c3-c', displayName: 'Hugo', isSelf: false, avatarGradient: ['#29B6F6', '#0277BD'] },
+    { id: 'c3-me', displayName: 'Moi', isSelf: true, avatarGradient: ['#78909C', '#546E7A'] },
+  ],
+  c4: [
+    { id: 'c4-a', displayName: 'Sam', isSelf: false, avatarGradient: ['#AB47BC', '#6A1B9A'] },
+    { id: 'c4-b', displayName: 'Alex', isSelf: false, avatarGradient: ['#26C6DA', '#00838F'] },
+    { id: 'c4-me', displayName: 'Moi', isSelf: true, avatarGradient: ['#78909C', '#546E7A'] },
+  ],
+};
 
 const seedMessages: Record<string, Message[]> = {
   c1: [
@@ -238,6 +279,12 @@ type MessagingContextValue = {
   toggleSortieFavorite: (sortieId: string) => void;
   messagesTabBadgeCount: number;
   visitesTabBadgeCount: number;
+  getGroupMembers: (conversationId: string) => GroupMember[];
+  getGroupSettings: (conversationId: string) => GroupChatSettings;
+  setGroupSettings: (conversationId: string, patch: Partial<GroupChatSettings>) => void;
+  removeGroupMember: (conversationId: string, memberId: string) => void;
+  addGroupMember: (conversationId: string) => void;
+  leaveGroup: (conversationId: string) => void;
 };
 
 const MessagingContext = createContext<MessagingContextValue | null>(null);
@@ -251,6 +298,11 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const [messagesByConversation, setMessagesByConversation] =
     useState<Record<string, Message[]>>(seedMessages);
   const [sorties, setSorties] = useState<Sortie[]>(seedSorties);
+  const [membersByConversation, setMembersByConversation] =
+    useState<Record<string, GroupMember[]>>(seedMembersByConversation);
+  const [groupSettingsByConversation, setGroupSettingsByConversation] = useState<
+    Record<string, GroupChatSettings>
+  >({});
 
   const messagesTabBadgeCount = useMemo(() => sumUnread(conversations), [conversations]);
   const visitesTabBadgeCount = 5;
@@ -326,6 +378,91 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     [sorties],
   );
 
+  const getGroupMembers = useCallback(
+    (conversationId: string) => membersByConversation[conversationId] ?? [],
+    [membersByConversation],
+  );
+
+  const getGroupSettings = useCallback(
+    (conversationId: string): GroupChatSettings =>
+      groupSettingsByConversation[conversationId] ?? {
+        muteSounds: false,
+        blockNotifications: false,
+      },
+    [groupSettingsByConversation],
+  );
+
+  const setGroupSettings = useCallback((conversationId: string, patch: Partial<GroupChatSettings>) => {
+    setGroupSettingsByConversation((prev) => {
+      const cur = prev[conversationId] ?? { muteSounds: false, blockNotifications: false };
+      return { ...prev, [conversationId]: { ...cur, ...patch } };
+    });
+  }, []);
+
+  const removeGroupMember = useCallback((conversationId: string, memberId: string) => {
+    let nextLen = 0;
+    setMembersByConversation((prev) => {
+      const list = prev[conversationId] ?? [];
+      const next = list.filter((m) => m.id !== memberId);
+      nextLen = next.length;
+      return { ...prev, [conversationId]: next };
+    });
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conversationId && c.type === 'group' ? { ...c, memberCount: nextLen } : c,
+      ),
+    );
+  }, []);
+
+  const addGroupMember = useCallback((conversationId: string) => {
+    let nextLen = 0;
+    let changed = false;
+    setMembersByConversation((prev) => {
+      const list = prev[conversationId] ?? [];
+      const taken = new Set(list.map((m) => m.displayName));
+      const name = EXTRA_MEMBER_NAMES.find((n) => !taken.has(n));
+      if (!name) return prev;
+      const g = GRADIENT_POOL[list.length % GRADIENT_POOL.length];
+      const member: GroupMember = {
+        id: makeId('mem'),
+        displayName: name,
+        isSelf: false,
+        avatarGradient: [g[0], g[1]],
+      };
+      const next = [...list, member];
+      nextLen = next.length;
+      changed = true;
+      return { ...prev, [conversationId]: next };
+    });
+    if (changed) {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId && c.type === 'group' ? { ...c, memberCount: nextLen } : c,
+        ),
+      );
+    }
+  }, []);
+
+  const leaveGroup = useCallback((conversationId: string) => {
+    setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+    setMessagesByConversation((prev) => {
+      const n = { ...prev };
+      delete n[conversationId];
+      return n;
+    });
+    setMembersByConversation((prev) => {
+      const n = { ...prev };
+      delete n[conversationId];
+      return n;
+    });
+    setGroupSettingsByConversation((prev) => {
+      const n = { ...prev };
+      delete n[conversationId];
+      return n;
+    });
+    setSorties((prev) => prev.filter((s) => s.conversationId !== conversationId));
+  }, []);
+
   const value = useMemo(
     () => ({
       stories: seedStories,
@@ -340,6 +477,12 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       toggleSortieFavorite,
       messagesTabBadgeCount,
       visitesTabBadgeCount,
+      getGroupMembers,
+      getGroupSettings,
+      setGroupSettings,
+      removeGroupMember,
+      addGroupMember,
+      leaveGroup,
     }),
     [
       conversations,
@@ -353,6 +496,12 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       toggleSortieFavorite,
       messagesTabBadgeCount,
       visitesTabBadgeCount,
+      getGroupMembers,
+      getGroupSettings,
+      setGroupSettings,
+      removeGroupMember,
+      addGroupMember,
+      leaveGroup,
     ],
   );
 

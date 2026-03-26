@@ -36,44 +36,93 @@ function formatRelativeTime(ts: number): string {
   return `${days} j`;
 }
 
-function StoryItem({
-  label,
-  badgeCount,
-  isGroup,
-  gradient,
-}: {
-  label: string;
-  badgeCount: number;
-  isGroup: boolean;
-  gradient: readonly [string, string];
-}) {
+function truncateStoryLabel(title: string, max = 11): string {
+  if (title.length <= max) return title;
+  return `${title.slice(0, max - 1)}…`;
+}
+
+function groupStoryVariant(id: string): 0 | 1 | 2 {
+  let s = 0;
+  for (let i = 0; i < id.length; i++) {
+    s = (s + id.charCodeAt(i)) % 3;
+  }
+  return s as 0 | 1 | 2;
+}
+
+function GroupStoryAvatarInner({ conversationId }: { conversationId: string }) {
+  const v = groupStoryVariant(conversationId);
+  if (v === 0) {
+    return (
+      <View style={styles.storySplit2}>
+        <View style={[styles.storySplitHalf, { backgroundColor: 'rgba(0,0,0,0.28)' }]} />
+        <View style={[styles.storySplitHalf, { backgroundColor: 'rgba(255,255,255,0.22)' }]} />
+      </View>
+    );
+  }
+  if (v === 1) {
+    return (
+      <View style={styles.storyGrid4}>
+        {[0, 1, 2, 3].map((i) => (
+          <View
+            key={i}
+            style={[styles.storyQuad, { backgroundColor: `rgba(255,255,255,${0.22 + i * 0.08})` }]}
+          />
+        ))}
+      </View>
+    );
+  }
   return (
-    <View style={styles.storyCell}>
+    <View style={styles.storyTriple}>
+      <View style={styles.storyTripleTop}>
+        <View style={[styles.storyTripleMini, { backgroundColor: 'rgba(255,255,255,0.28)' }]} />
+        <View style={[styles.storyTripleMini, { backgroundColor: 'rgba(0,0,0,0.2)' }]} />
+      </View>
+      <View style={[styles.storyTripleBottom, { backgroundColor: 'rgba(255,255,255,0.18)' }]} />
+    </View>
+  );
+}
+
+function GroupStoryStripItem({
+  conversation,
+  onPress,
+}: {
+  conversation: Conversation;
+  onPress: () => void;
+}) {
+  const label = truncateStoryLabel(conversation.title);
+  const badge = conversation.unreadCount;
+
+  return (
+    <Pressable onPress={onPress} style={styles.storyCell} accessibilityRole="button">
       <View style={styles.storyRing}>
-        <LinearGradient colors={[...gradient]} style={styles.storyAvatar} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-          {isGroup ? (
-            <View style={styles.storyGrid4}>
-              {[0, 1, 2, 3].map((i) => (
-                <View
-                  key={i}
-                  style={[styles.storyQuad, { backgroundColor: `rgba(255,255,255,${0.25 + (i * 0.1)})` }]}
-                />
-              ))}
-            </View>
-          ) : (
-            <Text style={styles.storyInitial}>{label.slice(0, 1)}</Text>
-          )}
+        <LinearGradient
+          colors={[...conversation.avatarGradient]}
+          style={styles.storyAvatar}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}>
+          <GroupStoryAvatarInner conversationId={conversation.id} />
         </LinearGradient>
-        {badgeCount > 0 ? (
+        {badge > 0 ? (
           <View style={styles.storyBadge}>
-            <Text style={styles.storyBadgeText}>{badgeCount > 9 ? '9+' : String(badgeCount)}</Text>
+            <Text style={styles.storyBadgeText}>{badge > 9 ? '9+' : String(badge)}</Text>
           </View>
         ) : null}
       </View>
       <Text style={styles.storyLabel} numberOfLines={1}>
         {label}
       </Text>
-    </View>
+    </Pressable>
+  );
+}
+
+function StoryNewStripItem({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={styles.storyCell} accessibilityRole="button" accessibilityLabel="Nouvelle discussion">
+      <View style={styles.storyNewRing}>
+        <Ionicons name="add" size={34} color="rgba(255,255,255,0.92)" />
+      </View>
+      <Text style={styles.storyLabelNew}>Nouveau</Text>
+    </Pressable>
   );
 }
 
@@ -194,13 +243,19 @@ function SubTabPill({
 }
 
 export default function ChatListScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { stories, conversations, messagesTabBadgeCount, visitesTabBadgeCount } = useMessaging();
+  const { conversations, messagesTabBadgeCount, visitesTabBadgeCount } = useMessaging();
   const [sub, setSub] = useState<SubTab>('messages');
 
   const sorted = useMemo(
     () => [...conversations].sort((a, b) => b.updatedAt - a.updatedAt),
     [conversations],
+  );
+
+  const groupStories = useMemo(
+    () => sorted.filter((c) => c.type === 'group'),
+    [sorted],
   );
 
   return (
@@ -210,20 +265,29 @@ export default function ChatListScreen() {
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
         style={[styles.headerGradient, { paddingTop: insets.top + 8 }]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.storiesScroll}>
-          {stories.map((s) => (
-            <StoryItem
-              key={s.id}
-              label={s.label}
-              badgeCount={s.badgeCount}
-              isGroup={s.isGroup}
-              gradient={s.gradient}
-            />
-          ))}
-        </ScrollView>
+        <View style={styles.storiesWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.storiesScroll}
+            style={styles.storiesScrollView}>
+            {groupStories.map((c) => (
+              <GroupStoryStripItem
+                key={c.id}
+                conversation={c}
+                onPress={() => router.push(`/chat/${c.id}`)}
+              />
+            ))}
+            <StoryNewStripItem onPress={() => router.push('/nouvelle-conversation')} />
+          </ScrollView>
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(255,107,53,0)', 'rgba(255,64,129,0.45)', 'rgba(171,71,188,0.92)']}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.storiesRightFade}
+          />
+        </View>
       </LinearGradient>
 
       <View style={styles.subTabBar}>
@@ -291,10 +355,27 @@ const styles = StyleSheet.create({
   headerGradient: {
     paddingBottom: 14,
   },
+  storiesWrap: {
+    position: 'relative',
+    width: '100%',
+  },
+  storiesScrollView: {
+    zIndex: 1,
+    width: '100%',
+  },
   storiesScroll: {
-    paddingHorizontal: ROW_STORY_GUTTER,
+    paddingLeft: ROW_STORY_GUTTER,
+    paddingRight: 56,
     gap: 14,
     alignItems: 'flex-start',
+  },
+  storiesRightFade: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 64,
+    zIndex: 2,
   },
   storyCell: {
     width: 72,
@@ -322,10 +403,47 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
   },
-  storyInitial: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '700',
+  storySplit2: {
+    width: 40,
+    height: 40,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    borderRadius: 4,
+  },
+  storySplitHalf: {
+    flex: 1,
+    height: '100%',
+  },
+  storyTriple: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+  },
+  storyTripleTop: {
+    flexDirection: 'row',
+    height: 18,
+    gap: 3,
+    marginBottom: 3,
+  },
+  storyTripleMini: {
+    flex: 1,
+    height: 18,
+    borderRadius: 2,
+  },
+  storyTripleBottom: {
+    height: 17,
+    borderRadius: 2,
+  },
+  storyNewRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.85)',
+    borderStyle: Platform.OS === 'android' ? 'solid' : 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   storyBadge: {
     position: 'absolute',
@@ -347,7 +465,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   storyLabel: {
-    color: Design.textPrimary,
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 6,
+    textAlign: 'center',
+    width: '100%',
+  },
+  storyLabelNew: {
+    color: 'rgba(255,255,255,0.88)',
     fontSize: 12,
     fontWeight: '700',
     marginTop: 6,

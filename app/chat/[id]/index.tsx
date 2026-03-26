@@ -112,6 +112,17 @@ export default function ChatScreen() {
       headerShadowVisible: false,
       headerTintColor: Design.textPrimary,
       headerTitleAlign: 'center',
+      /* Stack imbriqué : pas d’écran « précédent » dans ce stack → iOS masquait le retour. */
+      headerLeft: () => (
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          style={styles.headerBackBtn}
+          accessibilityLabel="Retour"
+          accessibilityRole="button">
+          <Ionicons name="chevron-back" size={28} color={Design.textPrimary} />
+        </Pressable>
+      ),
       headerTitle: () => (
         <View style={styles.headerTitleRow}>
           <HeaderAvatar conversation={conversation} />
@@ -139,7 +150,11 @@ export default function ChatScreen() {
               style={styles.headerIconBtn}>
               <Ionicons name="add-circle-outline" size={26} color={Design.textPrimary} />
             </Pressable>
-            <Pressable hitSlop={10} style={styles.headerIconBtn}>
+            <Pressable
+              onPress={() => router.push(`/chat/${id}/parametres`)}
+              hitSlop={10}
+              style={styles.headerIconBtn}
+              accessibilityLabel="Paramètres de la discussion">
               <Ionicons name="settings-outline" size={24} color={Design.textPrimary} />
             </Pressable>
           </View>
@@ -272,6 +287,13 @@ const styles = StyleSheet.create({
     color: Design.textSecondary,
     fontSize: 12,
     marginTop: 2,
+  },
+  headerBackBtn: {
+    marginLeft: Platform.OS === 'ios' ? 4 : 0,
+    paddingVertical: 4,
+    paddingRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerRightRow: {
     flexDirection: 'row',

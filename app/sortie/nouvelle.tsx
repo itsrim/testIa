@@ -124,11 +124,18 @@ export default function NouvelleSortieScreen() {
           style={[styles.field, styles.notes]}
         />
 
-        <Pressable
-          onPress={submit}
-          style={({ pressed }) => [styles.cta, { opacity: pressed ? 0.85 : 1 }]}>
-          <Text style={styles.ctaText}>Enregistrer la sortie</Text>
-        </Pressable>
+        <View style={styles.ctaRow}>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.ctaCancel, { opacity: pressed ? 0.85 : 1 }]}>
+            <Text style={styles.ctaCancelText}>Annuler</Text>
+          </Pressable>
+          <Pressable
+            onPress={submit}
+            style={({ pressed }) => [styles.cta, { opacity: pressed ? 0.85 : 1 }]}>
+            <Text style={styles.ctaText}>Valider</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -173,16 +180,47 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: 'top',
   },
-  cta: {
+  ctaRow: {
     marginTop: 28,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'stretch',
+  },
+  ctaCancel: {
+    flex: 1,
+    minHeight: 52,
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2c2c2e',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#444',
+  },
+  ctaCancelText: {
+    color: Design.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    width: '100%',
+  },
+  cta: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#0a7ea4',
   },
   ctaText: {
     color: '#fff',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
+    textAlign: 'center',
+    width: '100%',
+    ...(Platform.OS === 'android' ? { includeFontPadding: false } : {}),
   },
 });

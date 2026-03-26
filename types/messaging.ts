@@ -1,5 +1,17 @@
 export type ConversationType = 'direct' | 'group';
 
+export interface GroupMember {
+  id: string;
+  displayName: string;
+  isSelf: boolean;
+  avatarGradient: readonly [string, string];
+}
+
+export interface GroupChatSettings {
+  muteSounds: boolean;
+  blockNotifications: boolean;
+}
+
 export interface Conversation {
   id: string;
   title: string;

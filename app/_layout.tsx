@@ -39,12 +39,20 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: dark ? Design.bg : undefined },
           }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="chat/[id]" options={{ headerBackTitle: 'Retour' }} />
+          <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
           <Stack.Screen
             name="sortie/nouvelle"
             options={{
               presentation: 'modal',
               title: 'Nouvelle sortie',
+              headerBackTitle: 'Annuler',
+            }}
+          />
+          <Stack.Screen
+            name="nouvelle-conversation"
+            options={{
+              presentation: 'modal',
+              title: 'Nouvelle discussion',
               headerBackTitle: 'Annuler',
             }}
           />
