@@ -120,7 +120,7 @@ const GRADIENT_POOL: readonly (readonly [string, string])[] = [
 const seedMembersByConversation: Record<string, GroupMember[]> = {
   c2: [
     { id: 'c2-a', displayName: 'Antoine', isSelf: false, avatarGradient: ['#5C6BC0', '#3949AB'] },
-    { id: 'c2-b', displayName: 'Léa', isSelf: false, avatarGradient: ['#EC407A', '#AD1457'] },
+    { id: 'c2-b', displayName: 'Léa', isSelf: false, avatarGradient: ['#EC407A', '#AD1457'], profilId: 'sg7' },
     { id: 'c2-c', displayName: 'Kevin', isSelf: false, avatarGradient: ['#FFA726', '#F57C00'] },
     {
       id: 'c2-d',
@@ -128,6 +128,7 @@ const seedMembersByConversation: Record<string, GroupMember[]> = {
       isSelf: false,
       avatarGradient: ['#26A69A', '#00897B'],
       isFriendWithMe: true,
+      profilId: 'sg3',
     },
     { id: 'c2-me', displayName: 'Moi', isSelf: true, avatarGradient: ['#78909C', '#546E7A'] },
   ],
@@ -140,7 +141,13 @@ const seedMembersByConversation: Record<string, GroupMember[]> = {
       isFriendWithMe: true,
     },
     { id: 'c3-b', displayName: 'Camille', isSelf: false, avatarGradient: ['#FF7043', '#E64A19'] },
-    { id: 'c3-c', displayName: 'Hugo', isSelf: false, avatarGradient: ['#29B6F6', '#0277BD'] },
+    {
+      id: 'c3-c',
+      displayName: 'Hugo',
+      isSelf: false,
+      avatarGradient: ['#29B6F6', '#0277BD'],
+      profilId: 'sg4',
+    },
     { id: 'c3-me', displayName: 'Moi', isSelf: true, avatarGradient: ['#78909C', '#546E7A'] },
   ],
   c4: [

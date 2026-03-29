@@ -143,6 +143,26 @@ export default function ParametresDiscussionGroupeScreen() {
     [conversationId, addGroupMemberInvite],
   );
 
+  const openMemberProfile = useCallback(
+    (m: GroupMember) => {
+      if (m.profilId) {
+        router.push(`/profil/${m.profilId}`);
+        return;
+      }
+      router.push({
+        pathname: '/profil/[id]',
+        params: {
+          id: 'external',
+          fn: m.displayName,
+          g0: m.avatarGradient[0],
+          g1: m.avatarGradient[1],
+          seed: m.id,
+        },
+      });
+    },
+    [router],
+  );
+
   const runExitAnimation = useCallback(
     (onDone: () => void) => {
       const off = panelSlideOffsetPx();
@@ -380,10 +400,16 @@ export default function ParametresDiscussionGroupeScreen() {
 
           {members.map((m) => (
             <View key={m.id} style={styles.memberRow}>
-              <MemberAvatar member={m} />
-              <Text style={styles.memberName} numberOfLines={1}>
-                {m.displayName}
-              </Text>
+              <Pressable
+                style={styles.memberRowPressable}
+                onPress={() => openMemberProfile(m)}
+                accessibilityRole="button"
+                accessibilityLabel={`Profil de ${m.displayName}`}>
+                <MemberAvatar member={m} />
+                <Text style={styles.memberName} numberOfLines={1}>
+                  {m.displayName}
+                </Text>
+              </Pressable>
               {!m.isSelf ? (
                 <View style={styles.memberActions}>
                   <Pressable
@@ -620,7 +646,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
+    gap: 8,
+  },
+  memberRowPressable: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
+    flex: 1,
+    minWidth: 0,
   },
   memberAvatar: {
     width: 40,

@@ -7,6 +7,8 @@ export interface GroupMember {
   avatarGradient: readonly [string, string];
   /** `true` = dans votre liste d’amis ; utilisé pour l’accès aux messages de groupe. */
   isFriendWithMe?: boolean;
+  /** Si défini : id de fiche profil (`sg1`, …) dans les données suggestions ; sinon fiche synthétique. */
+  profilId?: string;
 }
 
 /** Groupe : l’historique est lisible seulement si au moins un autre membre est ami. */
