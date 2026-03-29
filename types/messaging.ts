@@ -30,20 +30,12 @@ export interface Conversation {
   lastMessagePreview: string;
   updatedAt: number;
   unreadCount: number;
-  /** Pastille type « story » en en-tête */
+  /** Pastille optionnelle en en-tête (favoris / activité) */
   storyBadgeCount?: number;
-  /** Couleurs avatar story (dégradé) */
+  /** Couleurs du dégradé (avatar liste et bandeau favoris) */
   avatarGradient: readonly [string, string];
   /** Groupe uniquement — sous-titre header « N membres » */
   memberCount?: number;
-}
-
-export interface StoryHighlight {
-  id: string;
-  label: string;
-  badgeCount: number;
-  isGroup: boolean;
-  gradient: readonly [string, string];
 }
 
 export type MessageMediaKind = 'image' | 'video';
@@ -82,5 +74,7 @@ export interface Sortie {
   participantMax: number;
   cardStatus: SortieCardStatus;
   isFavorite: boolean;
+  /** ISO YYYY-MM-DD — tri chronologique et filtre calendrier (données `events.csv`). */
+  dateKey: string;
   sectionDateLabel: string;
 }

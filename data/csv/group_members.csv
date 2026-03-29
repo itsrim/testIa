@@ -1,0 +1,13 @@
+conversationId,memberId,displayName,isSelf,g0,g1,isFriendWithMe,profilId
+c2,c2-a,Antoine,0,#5C6BC0,#3949AB,,
+c2,c2-b,Léa,0,#EC407A,#AD1457,,sg7
+c2,c2-c,Kevin,0,#FFA726,#F57C00,,
+c2,c2-d,Inès,0,#26A69A,#00897B,1,sg3
+c2,c2-me,Moi,1,#78909C,#546E7A,,
+c3,c3-a,Léo,0,#7E57C2,#5E35B1,1,
+c3,c3-b,Camille,0,#FF7043,#E64A19,,
+c3,c3-c,Hugo,0,#29B6F6,#0277BD,,sg4
+c3,c3-me,Moi,1,#78909C,#546E7A,,
+c4,c4-a,Sam,0,#AB47BC,#6A1B9A,0,
+c4,c4-b,Alex,0,#26C6DA,#00838F,0,
+c4,c4-me,Moi,1,#78909C,#546E7A,,

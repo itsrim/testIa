@@ -6,6 +6,7 @@ import React, {
   useState,
 } from 'react';
 import { playIncomingMessageFeedback } from '@/lib/playIncomingMessageFeedback';
+import { mockMessagingSeed } from '@/data/mockDataLoader';
 import {
   groupHasFriendForMessages,
   type Conversation,
@@ -14,7 +15,6 @@ import {
   type Message,
   type MessageMediaAttachment,
   type Sortie,
-  type StoryHighlight,
 } from '@/types/messaging';
 
 function makeId(prefix: string): string {
@@ -31,78 +31,13 @@ function lastPreviewForOutgoing(trimmed: string, media?: MessageMediaAttachment)
   return trimmed;
 }
 
-const now = Date.now();
-
-const seedStories: StoryHighlight[] = [
-  { id: 'st1', label: 'Rando D...', badgeCount: 5, isGroup: true, gradient: ['#FF7043', '#FFA726'] },
-  { id: 'st2', label: 'Team Pa...', badgeCount: 3, isGroup: true, gradient: ['#7E57C2', '#5C6BC0'] },
-  { id: 'st3', label: 'Maya', badgeCount: 2, isGroup: false, gradient: ['#EC407A', '#AB47BC'] },
-  { id: 'st4', label: 'Club UX', badgeCount: 4, isGroup: true, gradient: ['#26C6DA', '#42A5F5'] },
-  { id: 'st5', label: 'Lily', badgeCount: 0, isGroup: false, gradient: ['#66BB6A', '#26A69A'] },
-];
-
-const seedConversations: Conversation[] = [
-  {
-    id: 'c1',
-    title: 'Maya',
-    type: 'direct',
-    lastMessagePreview: 'Super ! On se retrouve là-bas alors 😊',
-    updatedAt: now - 3 * 60_000,
-    unreadCount: 2,
-    storyBadgeCount: 2,
-    avatarGradient: ['#EC407A', '#AB47BC'],
-  },
-  {
-    id: 'c2',
-    title: 'Rando Dimanche',
-    type: 'group',
-    lastMessagePreview: 'RDV 8h à la gare',
-    updatedAt: now - 5 * 60_000,
-    unreadCount: 5,
-    storyBadgeCount: 5,
-    avatarGradient: ['#FF7043', '#FFCA28'],
-    memberCount: 5,
-  },
-  {
-    id: 'c3',
-    title: 'Randonnée Urbaine',
-    type: 'group',
-    lastMessagePreview: 'Billets réservés !',
-    updatedAt: now - 10 * 60_000,
-    unreadCount: 3,
-    storyBadgeCount: 3,
-    avatarGradient: ['#5C6BC0', '#42A5F5'],
-    memberCount: 4,
-  },
-  {
-    id: 'c4',
-    title: 'Team Pastel',
-    type: 'group',
-    lastMessagePreview: 'Le brief est dans Notion ✓',
-    updatedAt: now - 25 * 60_000,
-    unreadCount: 1,
-    avatarGradient: ['#AB47BC', '#7E57C2'],
-    memberCount: 3,
-  },
-  {
-    id: 'c5',
-    title: 'Thomas',
-    type: 'direct',
-    lastMessagePreview: 'Je t’envoie le fichier PDF',
-    updatedAt: now - 32 * 60_000,
-    unreadCount: 0,
-    avatarGradient: ['#78909C', '#546E7A'],
-  },
-  {
-    id: 'c6',
-    title: 'Lily',
-    type: 'direct',
-    lastMessagePreview: 'Merci pour hier c’était sympa !',
-    updatedAt: now - 38 * 60_000,
-    unreadCount: 0,
-    avatarGradient: ['#66BB6A', '#43A047'],
-  },
-];
+const {
+  favoriteConversationIds: seedFavoriteConversationIds,
+  conversations: seedConversations,
+  membersByConversation: seedMembersByConversation,
+  messagesByConversation: seedMessages,
+  sorties: seedSorties,
+} = mockMessagingSeed;
 
 const EXTRA_MEMBER_NAMES = ['Sam', 'Julie', 'Noah', 'Chloé', 'Emma', 'Lucas', 'Zoé', 'Manon', 'Tom', 'Lina'];
 
@@ -117,172 +52,6 @@ const GRADIENT_POOL: readonly (readonly [string, string])[] = [
   ['#66BB6A', '#2E7D32'],
 ];
 
-const seedMembersByConversation: Record<string, GroupMember[]> = {
-  c2: [
-    { id: 'c2-a', displayName: 'Antoine', isSelf: false, avatarGradient: ['#5C6BC0', '#3949AB'] },
-    { id: 'c2-b', displayName: 'Léa', isSelf: false, avatarGradient: ['#EC407A', '#AD1457'], profilId: 'sg7' },
-    { id: 'c2-c', displayName: 'Kevin', isSelf: false, avatarGradient: ['#FFA726', '#F57C00'] },
-    {
-      id: 'c2-d',
-      displayName: 'Inès',
-      isSelf: false,
-      avatarGradient: ['#26A69A', '#00897B'],
-      isFriendWithMe: true,
-      profilId: 'sg3',
-    },
-    { id: 'c2-me', displayName: 'Moi', isSelf: true, avatarGradient: ['#78909C', '#546E7A'] },
-  ],
-  c3: [
-    {
-      id: 'c3-a',
-      displayName: 'Léo',
-      isSelf: false,
-      avatarGradient: ['#7E57C2', '#5E35B1'],
-      isFriendWithMe: true,
-    },
-    { id: 'c3-b', displayName: 'Camille', isSelf: false, avatarGradient: ['#FF7043', '#E64A19'] },
-    {
-      id: 'c3-c',
-      displayName: 'Hugo',
-      isSelf: false,
-      avatarGradient: ['#29B6F6', '#0277BD'],
-      profilId: 'sg4',
-    },
-    { id: 'c3-me', displayName: 'Moi', isSelf: true, avatarGradient: ['#78909C', '#546E7A'] },
-  ],
-  c4: [
-    { id: 'c4-a', displayName: 'Sam', isSelf: false, avatarGradient: ['#AB47BC', '#6A1B9A'], isFriendWithMe: false },
-    { id: 'c4-b', displayName: 'Alex', isSelf: false, avatarGradient: ['#26C6DA', '#00838F'], isFriendWithMe: false },
-    { id: 'c4-me', displayName: 'Moi', isSelf: true, avatarGradient: ['#78909C', '#546E7A'] },
-  ],
-};
-
-const seedMessages: Record<string, Message[]> = {
-  c1: [
-    {
-      id: 'm1',
-      conversationId: 'c1',
-      text: 'Super ! On se retrouve là-bas alors 😊',
-      sentAt: now - 3 * 60_000,
-      isOwn: false,
-    },
-  ],
-  c2: [
-    {
-      id: 'm2a',
-      conversationId: 'c2',
-      text: 'Haha oui c’est vrai',
-      sentAt: now - 6 * 60_000,
-      isOwn: false,
-      authorName: 'Inès',
-    },
-    {
-      id: 'm2b',
-      conversationId: 'c2',
-      text: 'test',
-      sentAt: now - 5 * 60_000,
-      isOwn: true,
-    },
-    {
-      id: 'm2c',
-      conversationId: 'c2',
-      text: 'RDV 8h à la gare',
-      sentAt: now - 4 * 60_000,
-      isOwn: false,
-      authorName: 'Maya',
-    },
-  ],
-  c3: [
-    {
-      id: 'm3',
-      conversationId: 'c3',
-      text: 'Billets réservés !',
-      sentAt: now - 10 * 60_000,
-      isOwn: false,
-      authorName: 'Léo',
-    },
-  ],
-  c4: [],
-  c5: [],
-  c6: [
-    {
-      id: 'm6',
-      conversationId: 'c6',
-      text: 'Merci pour hier c’était sympa !',
-      sentAt: now - 38 * 60_000,
-      isOwn: false,
-    },
-  ],
-};
-
-const seedSorties: Sortie[] = [
-  {
-    id: 's1',
-    conversationId: 'c2',
-    title: 'Cours de Peinture',
-    dateLabel: '1 janv. 2026',
-    timeShort: '08:00',
-    location: 'La Pachanga',
-    createdAt: now - 2_000_000,
-    imageUri: 'https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=600&q=80',
-    priceLabel: '142€',
-    participantCount: 126,
-    participantMax: 200,
-    cardStatus: 'inscrit',
-    isFavorite: false,
-    sectionDateLabel: 'Jeudi 1 Janvier',
-  },
-  {
-    id: 's2',
-    conversationId: 'c3',
-    title: 'Randonnée lac',
-    dateLabel: '1 janv. 2026',
-    timeShort: '09:30',
-    location: 'Parking téléphérique',
-    createdAt: now - 3_000_000,
-    imageUri: 'https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80',
-    priceLabel: 'Gratuit',
-    participantCount: 24,
-    participantMax: 40,
-    cardStatus: 'organisateur',
-    isFavorite: true,
-    sectionDateLabel: 'Jeudi 1 Janvier',
-  },
-  {
-    id: 's3',
-    conversationId: 'c1',
-    title: 'Brunch dimanche',
-    dateLabel: '2 janv. 2026',
-    timeShort: '11:00',
-    location: 'Rue du Stand',
-    createdAt: now - 5_000_000,
-    imageUri: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&q=80',
-    priceLabel: '35€',
-    participantCount: 8,
-    participantMax: 12,
-    cardStatus: 'join',
-    isFavorite: false,
-    sectionDateLabel: 'Vendredi 2 Janvier',
-  },
-  {
-    id: 's4',
-    conversationId: 'c4',
-    title: 'Soirée jeux',
-    dateLabel: '2 janv. 2026',
-    timeShort: '19:00',
-    location: 'Chez Sam',
-    notes: 'Ramener un jeu',
-    createdAt: now - 8_000_000,
-    imageUri: 'https://images.unsplash.com/photo-1610890716171-6b1cae5779df?w=600&q=80',
-    priceLabel: 'Gratuit',
-    participantCount: 12,
-    participantMax: 16,
-    cardStatus: 'inscrit',
-    isFavorite: false,
-    sectionDateLabel: 'Vendredi 2 Janvier',
-  },
-];
-
 export type NewSortieInput = {
   conversationId: string;
   title: string;
@@ -295,10 +64,13 @@ export type NewSortieInput = {
   participantMax?: number;
   cardStatus?: Sortie['cardStatus'];
   sectionDateLabel?: string;
+  /** ISO YYYY-MM-DD (défaut : jour courant). */
+  dateKey?: string;
 };
 
 type MessagingContextValue = {
-  stories: StoryHighlight[];
+  /** Ordre du bandeau « Conversations favoris » en tête d’écran (ids de `conversations`). */
+  favoriteConversationIds: readonly string[];
   conversations: Conversation[];
   getConversation: (id: string) => Conversation | undefined;
   messagesByConversation: Record<string, Message[]>;
@@ -307,7 +79,10 @@ type MessagingContextValue = {
   sorties: Sortie[];
   addSortie: (input: NewSortieInput) => void;
   sortiesForConversation: (conversationId: string) => Sortie[];
+  getSortieById: (sortieId: string) => Sortie | undefined;
   toggleSortieFavorite: (sortieId: string) => void;
+  /** Passe une sortie en statut inscrit (démo). */
+  joinSortie: (sortieId: string) => void;
   messagesTabBadgeCount: number;
   visitesTabBadgeCount: number;
   getGroupMembers: (conversationId: string) => GroupMember[];
@@ -350,7 +125,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   >({});
 
   const messagesTabBadgeCount = useMemo(() => sumUnread(conversations), [conversations]);
-  const visitesTabBadgeCount = 5;
+  const visitesTabBadgeCount = mockMessagingSeed.visitesTabBadgeCount;
 
   const getConversation = useCallback(
     (id: string) => conversations.find((c) => c.id === id),
@@ -381,6 +156,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       participantMax: input.participantMax ?? 50,
       cardStatus: input.cardStatus ?? 'join',
       isFavorite: false,
+      dateKey: input.dateKey ?? new Date().toISOString().slice(0, 10),
       sectionDateLabel: input.sectionDateLabel ?? 'À venir',
     };
     setSorties((prev) => [sortie, ...prev]);
@@ -389,6 +165,25 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const toggleSortieFavorite = useCallback((sortieId: string) => {
     setSorties((prev) =>
       prev.map((s) => (s.id === sortieId ? { ...s, isFavorite: !s.isFavorite } : s)),
+    );
+  }, []);
+
+  const getSortieById = useCallback(
+    (sortieId: string) => sorties.find((s) => s.id === sortieId),
+    [sorties],
+  );
+
+  const joinSortie = useCallback((sortieId: string) => {
+    setSorties((prev) =>
+      prev.map((s) => {
+        if (s.id !== sortieId || s.cardStatus !== 'join') return s;
+        if (s.participantCount >= s.participantMax) return s;
+        return {
+          ...s,
+          cardStatus: 'inscrit',
+          participantCount: s.participantCount + 1,
+        };
+      }),
     );
   }, []);
 
@@ -657,7 +452,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(
     () => ({
-      stories: seedStories,
+      favoriteConversationIds: seedFavoriteConversationIds,
       conversations,
       getConversation,
       messagesByConversation,
@@ -666,7 +461,9 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       sorties,
       addSortie,
       sortiesForConversation,
+      getSortieById,
       toggleSortieFavorite,
+      joinSortie,
       messagesTabBadgeCount,
       visitesTabBadgeCount,
       getGroupMembers,
@@ -689,7 +486,9 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       sorties,
       addSortie,
       sortiesForConversation,
+      getSortieById,
       toggleSortieFavorite,
+      joinSortie,
       messagesTabBadgeCount,
       visitesTabBadgeCount,
       getGroupMembers,

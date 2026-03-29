@@ -1,0 +1,13 @@
+id,pseudo,age,imageUrl,aspectRatio,verified,bio,memberSince,reliability,events,friends,badges
+sg1,clara.m,34,https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&q=80,0.68,1,"Passionnée de randonnée et de photographie. Toujours partante pour de nouvelles aventures !",2022,4.0,5,10,Ponctuelle|Amicale|Exploratrice
+sg2,lucasb,28,https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&q=80,0.92,1,"Créatif, cinéma et sorties entre amis. Toujours un projet en tête.",2021,4.5,12,24,Organisateur|Sociable
+sg3,ines.k,25,https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=600&q=80,0.75,0,"Yoga, lecture et bons restos. J’aime découvrir la ville autrement.",2023,4.2,3,8,Calme|Curieuse
+sg4,hugo_p,31,https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&q=80,0.82,1,"Trail et musique live. Toujours partant pour un concert ou une rando.",2020,4.8,18,42,Sportif|Fiable
+sg5,emma.r,22,https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600&q=80,0.65,1,"Étudiante en design, j’adore les expos et les cafés cachés.",2024,3.9,2,15,Créative
+sg6,nath_co,27,https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=600&q=80,0.88,0,"Développeur le jour, gamer le soir. Apéros et jeux de société bienvenus.",2022,4.1,7,19,Disponible|Cool
+sg7,lea.fnt,24,https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600&q=80,0.7,1,"Danse et voyages courts le week-end. Toujours avec mon appareil photo.",2021,4.6,9,22,Énergique|Ponctuelle
+sg8,tom.w,33,https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=600&q=80,0.95,1,"Cuisine du monde et vin nature. J’organise des dîners à thème.",2019,4.7,22,35,Hôte|Gourmand
+sg9,sarahb,29,https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=600&q=80,0.72,0,"Marche urbaine et bénévolat le samedi. Rencontrer des gens authentiques.",2023,4.3,4,11,Bienveillante
+sg10,max.leroy,26,https://images.unsplash.com/photo-1463453091185-61582044d556?w=600&q=80,0.78,1,"Skate et street art. Toujours une idée de spot à explorer.",2022,4.0,6,17,Spontané|Explorateur
+sg11,chloe.d,23,https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&q=80,0.66,1,"Mode durable et brunchs. J’aime les petits commerces de quartier.",2024,4.4,3,14,Stylée|Amicale
+sg12,j.morel,30,https://images.unsplash.com/photo-1504257432389-52343af06ae3?w=600&q=80,0.85,0,"Escalade et vanlife le temps d’un week-end. Cherche partenaires de grimpe.",2021,4.2,11,28,Aventurier|Fiable

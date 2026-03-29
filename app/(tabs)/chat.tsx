@@ -1,5 +1,6 @@
 import { Design } from '@/constants/design';
 import { useMessaging } from '@/context/MessagingContext';
+import { mockProfileVisits, type MockProfileVisit } from '@/data/mockDataLoader';
 import {
   formatSuggestionCaption,
   MOCK_SUGGESTION_PROFILES,
@@ -25,8 +26,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
-/** Gouttière stories (haut) */
-const ROW_STORY_GUTTER = 14;
+/** Gouttière bandeau « Conversations favoris » */
+const ROW_FAVORITES_GUTTER = 14;
 /** Liste messages : un peu plus large pour ne pas coller au bord (web / petits écrans) */
 const LIST_ROW_INSET_H = 18;
 const AVATAR_TEXT_GAP = 12;
@@ -34,55 +35,7 @@ const AVATAR_SIZE = 56;
 
 type SubTab = 'suggestions' | 'messages' | 'visites';
 
-type ProfileVisit = {
-  id: string;
-  name: string;
-  age: number;
-  avatarUrl: string;
-  lastVisitAt: number;
-  /** Affichage pastille jaune « x2 », « x3 » si > 1 */
-  visitMultiplier?: number;
-};
-
-const MOCK_PROFILE_VISITS: ProfileVisit[] = [
-  {
-    id: 'pv1',
-    name: 'Maya',
-    age: 18,
-    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=240&q=80',
-    lastVisitAt: Date.now() - 7 * 60_000,
-    visitMultiplier: 2,
-  },
-  {
-    id: 'pv2',
-    name: 'Thomas',
-    age: 24,
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=240&q=80',
-    lastVisitAt: Date.now() - 20 * 60_000,
-  },
-  {
-    id: 'pv3',
-    name: 'Lily',
-    age: 19,
-    avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=240&q=80',
-    lastVisitAt: Date.now() - 52 * 60_000,
-    visitMultiplier: 3,
-  },
-  {
-    id: 'pv4',
-    name: 'Camille',
-    age: 22,
-    avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=240&q=80',
-    lastVisitAt: Date.now() - 3 * 60 * 60_000,
-  },
-  {
-    id: 'pv5',
-    name: 'Noah',
-    age: 21,
-    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=240&q=80',
-    lastVisitAt: Date.now() - 26 * 60 * 60_000,
-  },
-];
+type ProfileVisit = MockProfileVisit;
 
 const VISIT_CARD_PINK = '#FF4081';
 const VISIT_CARD_BG = '#121212';
@@ -139,7 +92,7 @@ function groupStoryVariant(id: string): 0 | 1 | 2 {
   return s as 0 | 1 | 2;
 }
 
-function GroupStoryAvatarInner({ conversationId }: { conversationId: string }) {
+function FavoriteStripAvatarInner({ conversationId }: { conversationId: string }) {
   const v = groupStoryVariant(conversationId);
   if (v === 0) {
     return (
@@ -172,7 +125,7 @@ function GroupStoryAvatarInner({ conversationId }: { conversationId: string }) {
   );
 }
 
-function GroupStoryStripItem({
+function FavoriteConversationStripItem({
   conversation,
   onPress,
 }: {
@@ -190,7 +143,7 @@ function GroupStoryStripItem({
           style={styles.storyAvatar}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}>
-          <GroupStoryAvatarInner conversationId={conversation.id} />
+          <FavoriteStripAvatarInner conversationId={conversation.id} />
         </LinearGradient>
         {badge > 0 ? (
           <View style={styles.storyBadge}>
@@ -205,7 +158,7 @@ function GroupStoryStripItem({
   );
 }
 
-function StoryNewStripItem({ onPress }: { onPress: () => void }) {
+function FavoriteNewGroupStripItem({ onPress }: { onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={styles.storyCell} accessibilityRole="button" accessibilityLabel="Nouveau groupe">
       <View style={styles.storyNewRing}>
@@ -483,8 +436,13 @@ function SuggestionMasonryCard({
 export default function ChatListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { conversations, messagesTabBadgeCount, visitesTabBadgeCount, canViewGroupMessages } =
-    useMessaging();
+  const {
+    conversations,
+    favoriteConversationIds,
+    messagesTabBadgeCount,
+    visitesTabBadgeCount,
+    canViewGroupMessages,
+  } = useMessaging();
   const [sub, setSub] = useState<SubTab>('messages');
   const [visitLikedById, setVisitLikedById] = useState<Record<string, boolean>>({});
   const [suggestionLikedById, setSuggestionLikedById] = useState<Record<string, boolean>>({});
@@ -507,10 +465,12 @@ export default function ChatListScreen() {
     [conversations],
   );
 
-  const groupStories = useMemo(
-    () => sorted.filter((c) => c.type === 'group'),
-    [sorted],
-  );
+  const favoriteConversationsStrip = useMemo(() => {
+    const byId = new Map(conversations.map((c) => [c.id, c]));
+    return favoriteConversationIds
+      .map((id) => byId.get(id))
+      .filter((c): c is Conversation => c !== undefined);
+  }, [conversations, favoriteConversationIds]);
 
   return (
     <View style={styles.root}>
@@ -519,28 +479,35 @@ export default function ChatListScreen() {
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
         style={[styles.headerGradient, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.storiesWrap}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.storiesScroll}
-            style={styles.storiesScrollView}>
-            {groupStories.map((c) => (
-              <GroupStoryStripItem
-                key={c.id}
-                conversation={c}
-                onPress={() => router.push(`/chat/${c.id}`)}
-              />
-            ))}
-            <StoryNewStripItem onPress={() => router.push('/nouvelle-conversation')} />
-          </ScrollView>
-          <LinearGradient
-            pointerEvents="none"
-            colors={['rgba(255,107,53,0)', 'rgba(255,64,129,0.45)', 'rgba(171,71,188,0.92)']}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.storiesRightFade}
-          />
+        <View style={styles.favoritesHeaderSection}>
+          <Text
+            style={styles.favoritesSectionTitle}
+            accessibilityRole="header">
+            Conversations favoris
+          </Text>
+          <View style={styles.storiesWrap}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.storiesScroll}
+              style={styles.storiesScrollView}>
+              {favoriteConversationsStrip.map((c) => (
+                <FavoriteConversationStripItem
+                  key={c.id}
+                  conversation={c}
+                  onPress={() => router.push(`/chat/${c.id}`)}
+                />
+              ))}
+              <FavoriteNewGroupStripItem onPress={() => router.push('/nouvelle-conversation')} />
+            </ScrollView>
+            <LinearGradient
+              pointerEvents="none"
+              colors={['rgba(255,107,53,0)', 'rgba(255,64,129,0.45)', 'rgba(171,71,188,0.92)']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.storiesRightFade}
+            />
+          </View>
         </View>
       </LinearGradient>
 
@@ -603,7 +570,7 @@ export default function ChatListScreen() {
         />
       ) : sub === 'visites' ? (
         <FlatList
-          data={MOCK_PROFILE_VISITS}
+          data={mockProfileVisits}
           keyExtractor={(v) => v.id}
           style={styles.list}
           showsVerticalScrollIndicator={false}
@@ -662,6 +629,18 @@ const styles = StyleSheet.create({
   headerGradient: {
     paddingBottom: 14,
   },
+  favoritesHeaderSection: {
+    width: '100%',
+  },
+  favoritesSectionTitle: {
+    paddingLeft: ROW_FAVORITES_GUTTER,
+    paddingRight: 12,
+    marginBottom: 10,
+    fontSize: 17,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.96)',
+    letterSpacing: 0.2,
+  },
   storiesWrap: {
     position: 'relative',
     width: '100%',
@@ -671,7 +650,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   storiesScroll: {
-    paddingLeft: ROW_STORY_GUTTER,
+    paddingLeft: ROW_FAVORITES_GUTTER,
     paddingRight: 56,
     gap: 14,
     alignItems: 'flex-start',

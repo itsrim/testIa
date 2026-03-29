@@ -1,0 +1,7 @@
+id,conversationId,text,sentMinutesAgo,isOwn,authorName,mediaUri,mediaKind
+m1,c1,"Super ! On se retrouve là-bas alors 😊",3,0,,,
+m2a,c2,Haha oui c’est vrai,6,0,Inès,,
+m2b,c2,test,5,1,,,
+m2c,c2,RDV 8h à la gare,4,0,Maya,,
+m3,c3,Billets réservés !,10,0,Léo,,
+m6,c6,Merci pour hier c’était sympa !,38,0,,,

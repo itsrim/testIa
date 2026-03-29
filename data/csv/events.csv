@@ -1,0 +1,19 @@
+id,conversationId,title,dateLabel,timeShort,location,notes,createdOffsetMs,imageUri,priceLabel,participantCount,participantMax,cardStatus,isFavorite,dateKey,sectionDateLabel
+e1,c3,Yoga matinal,23 mars,07:00,Studio Zen,,100000,https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&q=80,12€,8,20,join,0,2026-03-23,Lundi 23 mars
+e2,c1,Lecture & café,23 mars,15:30,Librairie Pages,,150000,https://images.unsplash.com/photo-1524990029476-e1dbf922c866?w=600&q=80,Gratuit,14,25,inscrit,0,2026-03-23,Lundi 23 mars
+e3,c2,Running club,24 mars,07:30,Parc des Bastions,,200000,https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=600&q=80,Gratuit,18,30,join,0,2026-03-24,Mardi 24 mars
+e4,c4,Afterwork tacos,24 mars,19:00,Cantina 9,,250000,https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&q=80,18€,22,40,inscrit,0,2026-03-24,Mardi 24 mars
+e5,c4,Meetup UX,25 mars,18:30,Cowork Rivoli,,300000,https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=600&q=80,Gratuit,12,35,join,0,2026-03-25,Mercredi 25 mars
+e6,c2,Concert jazz,25 mars,21:00,Salle Pivoine,,350000,https://images.unsplash.com/photo-1415201364774-f6f0ee35f00f?w=600&q=80,25€,45,80,inscrit,0,2026-03-25,Mercredi 25 mars
+e7,c2,Cours de Peinture,26 mars,08:00,La Pachanga,,400000,https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=600&q=80,142€,126,200,inscrit,0,2026-03-26,Jeudi 26 mars
+e8,c3,Randonnée lac,26 mars,09:30,Parking téléphérique,,450000,https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80,Gratuit,24,40,organisateur,1,2026-03-26,Jeudi 26 mars
+e9,c3,Atelier DIY,26 mars,14:00,Atelier Paris,,500000,https://images.unsplash.com/photo-1452860606241-72869450a1da?w=600&q=80,Gratuit,10,15,inscrit,0,2026-03-26,Jeudi 26 mars
+e10,c2,Soirée Poker,26 mars,19:00,La Pachanga,,550000,https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=600&q=80,12€,14,20,join,0,2026-03-26,Jeudi 26 mars
+e11,c1,Méditation guidée,26 mars,20:30,Espace Calme,,600000,https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&q=80,15€,6,12,join,0,2026-03-26,Jeudi 26 mars
+e12,c4,Soirée jeux,26 mars,19:30,Chez Sam,Ramener un jeu,650000,https://images.unsplash.com/photo-1610890716171-6b1cae5779df?w=600&q=80,Gratuit,16,16,inscrit,0,2026-03-26,Jeudi 26 mars
+e13,c1,Brunch équipe,27 mars,11:00,Rue du Stand,,700000,https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&q=80,35€,8,12,join,0,2026-03-27,Vendredi 27 mars
+e14,c4,Apéro rooftop,27 mars,18:00,Terrasse Nord,,750000,https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&q=80,Gratuit,28,45,inscrit,0,2026-03-27,Vendredi 27 mars
+e15,c3,Marché créateurs,28 mars,10:00,Halle Centrale,,800000,https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&q=80,Gratuit,40,120,join,0,2026-03-28,Samedi 28 mars
+e16,c1,Atelier photo,28 mars,16:00,Galerie Lumière,,850000,https://images.unsplash.com/photo-1452587925148-ce544e77e70d?w=600&q=80,45€,12,18,inscrit,0,2026-03-28,Samedi 28 mars
+e17,c4,Trail matinal,29 mars,07:00,Départ Salève,,900000,https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80,Gratuit,9,25,organisateur,0,2026-03-29,Dimanche 29 mars
+e18,c2,Closing week-end,29 mars,18:00,Bar du Rhône,,950000,https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&q=80,10€,20,35,join,0,2026-03-29,Dimanche 29 mars
