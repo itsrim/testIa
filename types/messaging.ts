@@ -77,4 +77,8 @@ export interface Sortie {
   /** ISO YYYY-MM-DD — tri chronologique et filtre calendrier (données `events.csv`). */
   dateKey: string;
   sectionDateLabel: string;
+  /** Création : ne pas afficher l’adresse précise publiquement. */
+  hideAddress?: boolean;
+  /** Création : l’organisateur valide chaque inscription. */
+  manualApproval?: boolean;
 }

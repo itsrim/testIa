@@ -1,6 +1,7 @@
 import { Design } from '@/constants/design';
 import { useMessaging } from '@/context/MessagingContext';
 import type { Sortie } from '@/types/messaging';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -9,6 +10,7 @@ import {
   Dimensions,
   InteractionManager,
   NativeSyntheticEvent,
+  Platform,
   Pressable,
   ScrollView,
   SectionList,
@@ -386,6 +388,7 @@ function isEventInWeek(s: Sortie, weekStartMonday: Date): boolean {
 }
 
 export default function SortiesScreen() {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { sorties, toggleSortieFavorite } = useMessaging();
   const [weekStartMonday, setWeekStartMonday] = useState<Date>(() => new Date(INITIAL_WEEK_MONDAY));
@@ -547,7 +550,9 @@ export default function SortiesScreen() {
    */
   const listEmpty =
     sorties.length === 0 ? (
-      <Text style={styles.empty}>Aucun événement. Créez-en depuis une conversation.</Text>
+      <Text style={styles.empty}>
+        Aucun événement. Appuyez sur + pour en créer un, ou depuis une conversation.
+      </Text>
     ) : weekEvents.length === 0 ? (
       <Text style={styles.empty}>
         Aucun événement sur cette semaine ({formatWeekRangeLabel(weekStartMonday)}).
@@ -605,6 +610,22 @@ export default function SortiesScreen() {
         )}
         SectionSeparatorComponent={() => null}
       />
+      <Pressable
+        onPress={() => {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          router.push('/sortie/creer');
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Créer un événement"
+        style={({ pressed }) => [styles.fab, { bottom: Math.max(insets.bottom, 14) + 62 }, pressed && { opacity: 0.9 }]}>
+        <LinearGradient
+          colors={[...CAL_GRADIENT]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fabInner}>
+          <Ionicons name="add" size={30} color="#FFFFFF" />
+        </LinearGradient>
+      </Pressable>
     </View>
   );
 }
@@ -614,6 +635,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Design.bg,
   },
+  fab: {
+    position: 'absolute',
+    right: 18,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    overflow: 'hidden',
+    zIndex: 40,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#9B2D6E',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.5,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 14,
+      },
+    }),
+  },
+  fabInner: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sectionList: {
     flex: 1,
   },
@@ -622,7 +668,7 @@ const styles = StyleSheet.create({
   },
   sectionListContentEmpty: {
     flexGrow: 1,
-    paddingBottom: 24,
+    paddingBottom: 120,
   },
   stickySectionHeader: {
     backgroundColor: Design.bg,

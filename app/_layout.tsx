@@ -51,6 +51,14 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
+            name="sortie/creer"
+            options={{
+              presentation: 'modal',
+              headerShown: false,
+              animation: 'slide_from_bottom',
+            }}
+          />
+          <Stack.Screen
             name="nouvelle-conversation"
             options={{
               presentation: 'modal',

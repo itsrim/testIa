@@ -66,6 +66,8 @@ export type NewSortieInput = {
   sectionDateLabel?: string;
   /** ISO YYYY-MM-DD (défaut : jour courant). */
   dateKey?: string;
+  hideAddress?: boolean;
+  manualApproval?: boolean;
 };
 
 type MessagingContextValue = {
@@ -158,6 +160,8 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       isFavorite: false,
       dateKey: input.dateKey ?? new Date().toISOString().slice(0, 10),
       sectionDateLabel: input.sectionDateLabel ?? 'À venir',
+      hideAddress: input.hideAddress,
+      manualApproval: input.manualApproval,
     };
     setSorties((prev) => [sortie, ...prev]);
   }, []);
