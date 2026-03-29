@@ -19,7 +19,7 @@ const TAB_CONFIG: Record<
 > = {
   index: { label: 'Home', icon: 'home-outline' },
   chat: { label: 'Chat', icon: 'chatbubble-outline' },
-  sorties: { label: 'Event', icon: 'ticket-outline' },
+  events: { label: 'Event', icon: 'ticket-outline' },
   profile: { label: 'Profil', icon: 'person-outline' },
 };
 

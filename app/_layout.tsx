@@ -5,6 +5,7 @@ import 'react-native-reanimated';
 
 import { Design } from '@/constants/design';
 import { MessagingProvider } from '@/context/MessagingContext';
+import { ProfileSettingsProvider } from '@/context/ProfileSettingsContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export const unstable_settings = {
@@ -30,7 +31,8 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={dark ? AppDarkTheme : DefaultTheme}>
-      <MessagingProvider>
+      <ProfileSettingsProvider>
+        <MessagingProvider>
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: dark ? Design.bg : undefined },
@@ -41,17 +43,17 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="profil/[id]" options={{ headerShown: false }} />
-          <Stack.Screen name="sortie/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="event/[id]" options={{ headerShown: false }} />
           <Stack.Screen
-            name="sortie/nouvelle"
+            name="event/new"
             options={{
               presentation: 'modal',
-              title: 'Nouvelle sortie',
-              headerBackTitle: 'Annuler',
+              title: 'New event',
+              headerBackTitle: 'Cancel',
             }}
           />
           <Stack.Screen
-            name="sortie/creer"
+            name="event/create"
             options={{
               presentation: 'modal',
               headerShown: false,
@@ -68,7 +70,8 @@ export default function RootLayout() {
           />
         </Stack>
         <StatusBar style={dark ? 'light' : 'dark'} />
-      </MessagingProvider>
+        </MessagingProvider>
+      </ProfileSettingsProvider>
     </ThemeProvider>
   );
 }

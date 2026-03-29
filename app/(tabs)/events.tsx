@@ -1,12 +1,14 @@
 import { Design } from '@/constants/design';
 import { useMessaging } from '@/context/MessagingContext';
-import type { Sortie } from '@/types/messaging';
+import { useProfileSettings } from '@/context/ProfileSettingsContext';
+import type { Event } from '@/types/messaging';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Dimensions,
   InteractionManager,
   NativeSyntheticEvent,
@@ -125,16 +127,16 @@ function timeToMinutes(timeShort: string): number {
 /** Titre de section date (sticky) : bleu clair centré. */
 const SECTION_DATE_BLUE = '#7EB8FF';
 
-type SortiePairRow = { key: string; left: Sortie; right?: Sortie };
+type EventPairRow = { key: string; left: Event; right?: Event };
 
-type AgendaSection = SectionListData<SortiePairRow> & {
+type AgendaSection = SectionListData<EventPairRow> & {
   dateKey: string;
   dayOfMonth: number;
   sectionIndex: number;
 };
 
-function chunkSortiesIntoPairs(items: Sortie[]): SortiePairRow[] {
-  const rows: SortiePairRow[] = [];
+function chunkEventsIntoPairs(items: Event[]): EventPairRow[] {
+  const rows: EventPairRow[] = [];
   for (let i = 0; i < items.length; i += 2) {
     const left = items[i];
     const right = items[i + 1];
@@ -292,7 +294,7 @@ function CalendarHeader({
   );
 }
 
-function SortieCard({ item, onToggleFavorite }: { item: Sortie; onToggleFavorite: () => void }) {
+function EventCard({ item, onToggleFavorite }: { item: Event; onToggleFavorite: () => void }) {
   const router = useRouter();
 
   const statusEl =
@@ -311,7 +313,7 @@ function SortieCard({ item, onToggleFavorite }: { item: Sortie; onToggleFavorite
       </View>
     );
 
-  const openDetail = () => router.push(`/sortie/${item.id}`);
+  const openDetail = () => router.push(`/event/${item.id}`);
 
   return (
     <View style={styles.card}>
@@ -383,17 +385,38 @@ function SortieCard({ item, onToggleFavorite }: { item: Sortie; onToggleFavorite
   );
 }
 
-function isEventInWeek(s: Sortie, weekStartMonday: Date): boolean {
+function isEventInWeek(s: Event, weekStartMonday: Date): boolean {
   return isDateKeyInWeek(s.dateKey.trim(), weekStartMonday);
 }
 
-export default function SortiesScreen() {
+export default function EventsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { sorties, toggleSortieFavorite } = useMessaging();
+  const { events, toggleEventFavorite } = useMessaging();
+  const { getLimits, isPremium, isRestricted } = useProfileSettings();
+
+  const handleToggleFavorite = useCallback(
+    (eventId: string) => {
+      const ev = events.find((e) => e.id === eventId);
+      if (!ev) return;
+      if (!ev.isFavorite && !isPremium && isRestricted('limitRegistrations')) {
+        const favCount = events.filter((e) => e.isFavorite).length;
+        const maxF = getLimits().maxFavorites;
+        if (favCount >= maxF) {
+          Alert.alert(
+            'Limite favoris',
+            `Maximum ${maxF} favoris en mode gratuit. Passez en Premium dans l’onglet Profil.`,
+          );
+          return;
+        }
+      }
+      toggleEventFavorite(eventId);
+    },
+    [events, getLimits, isPremium, isRestricted, toggleEventFavorite],
+  );
   const [weekStartMonday, setWeekStartMonday] = useState<Date>(() => new Date(INITIAL_WEEK_MONDAY));
   const [selectedDateKey, setSelectedDateKey] = useState<string>(INITIAL_DATE_KEY);
-  const listRef = useRef<SectionList<SortiePairRow, AgendaSection>>(null);
+  const listRef = useRef<SectionList<EventPairRow, AgendaSection>>(null);
   const suppressScrollSync = useRef(false);
   /** Évite le scroll auto au changement de semaine quand la semaine vient du tap sur un jour. */
   const skipWeekChangeScroll = useRef(false);
@@ -402,11 +425,11 @@ export default function SortiesScreen() {
   selectedDateKeyRef.current = selectedDateKey;
 
   const weekEvents = useMemo(() => {
-    return sorties.filter((s) => isEventInWeek(s, weekStartMonday));
-  }, [sorties, weekStartMonday]);
+    return events.filter((s) => isEventInWeek(s, weekStartMonday));
+  }, [events, weekStartMonday]);
 
   const sectionListSections = useMemo((): AgendaSection[] => {
-    const map = new Map<string, Sortie[]>();
+    const map = new Map<string, Event[]>();
     for (const s of weekEvents) {
       const k = s.sectionDateLabel;
       if (!map.has(k)) map.set(k, []);
@@ -430,7 +453,7 @@ export default function SortiesScreen() {
         dateKey: dk,
         dayOfMonth: dayOfMonthFromDateKey(dk),
         sectionIndex,
-        data: chunkSortiesIntoPairs(sorted),
+        data: chunkEventsIntoPairs(sorted),
       };
     });
   }, [weekEvents]);
@@ -549,7 +572,7 @@ export default function SortiesScreen() {
    * et le scroll vers le jour sélectionné ne fonctionne pas (comportement RN).
    */
   const listEmpty =
-    sorties.length === 0 ? (
+    events.length === 0 ? (
       <Text style={styles.empty}>
         Aucun événement. Appuyez sur + pour en créer un, ou depuis une conversation.
       </Text>
@@ -568,7 +591,7 @@ export default function SortiesScreen() {
         onShiftWeek={shiftWeek}
         insetTop={insets.top}
       />
-      <SectionList<SortiePairRow, AgendaSection>
+      <SectionList<EventPairRow, AgendaSection>
         ref={listRef}
         style={styles.sectionList}
         sections={sectionListSections}
@@ -579,7 +602,7 @@ export default function SortiesScreen() {
         viewabilityConfig={viewabilityConfig}
         onViewableItemsChanged={onViewableItemsChanged}
         contentContainerStyle={
-          sorties.length === 0 || weekEvents.length === 0
+          events.length === 0 || weekEvents.length === 0
             ? styles.sectionListContentEmpty
             : [styles.sectionListContent, { paddingBottom: Design.contentBottomSpace + insets.bottom + 12 }]
         }
@@ -591,16 +614,16 @@ export default function SortiesScreen() {
         renderItem={({ item }) => (
           <View style={styles.gridRow}>
             <View style={[styles.gridCell, { width: COL_W }]}>
-              <SortieCard
+              <EventCard
                 item={item.left}
-                onToggleFavorite={() => toggleSortieFavorite(item.left.id)}
+                onToggleFavorite={() => handleToggleFavorite(item.left.id)}
               />
             </View>
             {item.right ? (
               <View style={[styles.gridCell, { width: COL_W }]}>
-                <SortieCard
+                <EventCard
                   item={item.right}
-                  onToggleFavorite={() => toggleSortieFavorite(item.right!.id)}
+                  onToggleFavorite={() => handleToggleFavorite(item.right!.id)}
                 />
               </View>
             ) : (
@@ -613,7 +636,7 @@ export default function SortiesScreen() {
       <Pressable
         onPress={() => {
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          router.push('/sortie/creer');
+          router.push('/event/create');
         }}
         accessibilityRole="button"
         accessibilityLabel="Créer un événement"

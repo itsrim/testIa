@@ -15,12 +15,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function NouvelleSortieScreen() {
+export default function NewEventScreen() {
   const { conversationId: rawConv } = useLocalSearchParams<{ conversationId: string }>();
   const conversationId = Array.isArray(rawConv) ? rawConv[0] : rawConv;
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { getConversation, addSortie } = useMessaging();
+  const { getConversation, addEvent } = useMessaging();
 
   const conversation = conversationId ? getConversation(conversationId) : undefined;
 
@@ -47,7 +47,7 @@ export default function NouvelleSortieScreen() {
       Alert.alert('Champs requis', 'Renseignez au moins le titre, la date et le lieu.');
       return;
     }
-    addSortie({
+    addEvent({
       conversationId,
       title: t,
       dateLabel: d,
@@ -78,7 +78,7 @@ export default function NouvelleSortieScreen() {
         <Text style={styles.label}>Discussion</Text>
         <Text style={styles.convName}>{conversation.title}</Text>
 
-        <Text style={[styles.label, { marginTop: 20 }]}>Titre de la sortie</Text>
+        <Text style={[styles.label, { marginTop: 20 }]}>Event title</Text>
         <TextInput
           value={title}
           onChangeText={setTitle}

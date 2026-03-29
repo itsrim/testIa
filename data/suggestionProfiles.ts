@@ -55,7 +55,7 @@ export function buildMemberFallbackProfile(input: {
     imageUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(input.displayName)}&size=512&background=${g0}&color=ffffff`,
     aspectRatio: 0.72,
     verified: h % 3 === 0,
-    bio: 'Passionné(e) de sorties et de rencontres. Toujours partant(e) pour de nouveaux projets !',
+    bio: 'Passionné(e) d’événements et de rencontres. Toujours partant(e) pour de nouveaux projets !',
     memberSince: String(2019 + (h % 5)),
     stats: {
       reliability: Math.round((3.5 + (h % 15) / 10) * 10) / 10,

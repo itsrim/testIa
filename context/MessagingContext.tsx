@@ -14,7 +14,7 @@ import {
   type GroupMember,
   type Message,
   type MessageMediaAttachment,
-  type Sortie,
+  type Event,
 } from '@/types/messaging';
 
 function makeId(prefix: string): string {
@@ -36,7 +36,7 @@ const {
   conversations: seedConversations,
   membersByConversation: seedMembersByConversation,
   messagesByConversation: seedMessages,
-  sorties: seedSorties,
+  events: seedEvents,
 } = mockMessagingSeed;
 
 const EXTRA_MEMBER_NAMES = ['Sam', 'Julie', 'Noah', 'Chloé', 'Emma', 'Lucas', 'Zoé', 'Manon', 'Tom', 'Lina'];
@@ -52,7 +52,7 @@ const GRADIENT_POOL: readonly (readonly [string, string])[] = [
   ['#66BB6A', '#2E7D32'],
 ];
 
-export type NewSortieInput = {
+export type NewEventInput = {
   conversationId: string;
   title: string;
   dateLabel: string;
@@ -62,7 +62,7 @@ export type NewSortieInput = {
   priceLabel?: string;
   imageUri?: string;
   participantMax?: number;
-  cardStatus?: Sortie['cardStatus'];
+  cardStatus?: Event['cardStatus'];
   sectionDateLabel?: string;
   /** ISO YYYY-MM-DD (défaut : jour courant). */
   dateKey?: string;
@@ -78,13 +78,13 @@ type MessagingContextValue = {
   messagesByConversation: Record<string, Message[]>;
   sendMessage: (conversationId: string, text: string, media?: MessageMediaAttachment) => void;
   markConversationRead: (conversationId: string) => void;
-  sorties: Sortie[];
-  addSortie: (input: NewSortieInput) => void;
-  sortiesForConversation: (conversationId: string) => Sortie[];
-  getSortieById: (sortieId: string) => Sortie | undefined;
-  toggleSortieFavorite: (sortieId: string) => void;
-  /** Passe une sortie en statut inscrit (démo). */
-  joinSortie: (sortieId: string) => void;
+  events: Event[];
+  addEvent: (input: NewEventInput) => void;
+  eventsForConversation: (conversationId: string) => Event[];
+  getEventById: (eventId: string) => Event | undefined;
+  toggleEventFavorite: (eventId: string) => void;
+  /** Passe un événement en statut inscrit (démo). */
+  joinEvent: (eventId: string) => void;
   messagesTabBadgeCount: number;
   visitesTabBadgeCount: number;
   getGroupMembers: (conversationId: string) => GroupMember[];
@@ -119,7 +119,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const [conversations, setConversations] = useState<Conversation[]>(seedConversations);
   const [messagesByConversation, setMessagesByConversation] =
     useState<Record<string, Message[]>>(seedMessages);
-  const [sorties, setSorties] = useState<Sortie[]>(seedSorties);
+  const [events, setEvents] = useState<Event[]>(seedEvents);
   const [membersByConversation, setMembersByConversation] =
     useState<Record<string, GroupMember[]>>(seedMembersByConversation);
   const [groupSettingsByConversation, setGroupSettingsByConversation] = useState<
@@ -140,9 +140,9 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  const addSortie = useCallback((input: NewSortieInput) => {
-    const sortie: Sortie = {
-      id: makeId('sortie'),
+  const addEvent = useCallback((input: NewEventInput) => {
+    const event: Event = {
+      id: makeId('event'),
       createdAt: Date.now(),
       conversationId: input.conversationId,
       title: input.title,
@@ -163,24 +163,24 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       hideAddress: input.hideAddress,
       manualApproval: input.manualApproval,
     };
-    setSorties((prev) => [sortie, ...prev]);
+    setEvents((prev) => [event, ...prev]);
   }, []);
 
-  const toggleSortieFavorite = useCallback((sortieId: string) => {
-    setSorties((prev) =>
-      prev.map((s) => (s.id === sortieId ? { ...s, isFavorite: !s.isFavorite } : s)),
+  const toggleEventFavorite = useCallback((eventId: string) => {
+    setEvents((prev) =>
+      prev.map((s) => (s.id === eventId ? { ...s, isFavorite: !s.isFavorite } : s)),
     );
   }, []);
 
-  const getSortieById = useCallback(
-    (sortieId: string) => sorties.find((s) => s.id === sortieId),
-    [sorties],
+  const getEventById = useCallback(
+    (eventId: string) => events.find((s) => s.id === eventId),
+    [events],
   );
 
-  const joinSortie = useCallback((sortieId: string) => {
-    setSorties((prev) =>
+  const joinEvent = useCallback((eventId: string) => {
+    setEvents((prev) =>
       prev.map((s) => {
-        if (s.id !== sortieId || s.cardStatus !== 'join') return s;
+        if (s.id !== eventId || s.cardStatus !== 'join') return s;
         if (s.participantCount >= s.participantMax) return s;
         return {
           ...s,
@@ -191,9 +191,9 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  const sortiesForConversation = useCallback(
-    (conversationId: string) => sorties.filter((s) => s.conversationId === conversationId),
-    [sorties],
+  const eventsForConversation = useCallback(
+    (conversationId: string) => events.filter((s) => s.conversationId === conversationId),
+    [events],
   );
 
   const getGroupMembers = useCallback(
@@ -451,7 +451,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       delete n[conversationId];
       return n;
     });
-    setSorties((prev) => prev.filter((s) => s.conversationId !== conversationId));
+    setEvents((prev) => prev.filter((s) => s.conversationId !== conversationId));
   }, []);
 
   const value = useMemo(
@@ -462,12 +462,12 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       messagesByConversation,
       sendMessage,
       markConversationRead,
-      sorties,
-      addSortie,
-      sortiesForConversation,
-      getSortieById,
-      toggleSortieFavorite,
-      joinSortie,
+      events,
+      addEvent,
+      eventsForConversation,
+      getEventById,
+      toggleEventFavorite,
+      joinEvent,
       messagesTabBadgeCount,
       visitesTabBadgeCount,
       getGroupMembers,
@@ -487,12 +487,12 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       messagesByConversation,
       sendMessage,
       markConversationRead,
-      sorties,
-      addSortie,
-      sortiesForConversation,
-      getSortieById,
-      toggleSortieFavorite,
-      joinSortie,
+      events,
+      addEvent,
+      eventsForConversation,
+      getEventById,
+      toggleEventFavorite,
+      joinEvent,
       messagesTabBadgeCount,
       visitesTabBadgeCount,
       getGroupMembers,

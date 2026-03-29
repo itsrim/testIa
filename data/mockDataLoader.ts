@@ -3,8 +3,8 @@ import type {
   GroupMember,
   Message,
   MessageMediaKind,
-  Sortie,
-  SortieCardStatus,
+  Event,
+  EventCardStatus,
 } from '@/types/messaging';
 import { csvEmbedded } from './csvEmbedded';
 import { csvBool, csvNum, parseCsv } from './parseCsv';
@@ -99,9 +99,9 @@ function parseMessages(anchor: number): Record<string, Message[]> {
 }
 
 /** Événements agenda — source CSV `data/csv/events.csv` (clé embarquée `events`). */
-function parseEvents(anchor: number): Sortie[] {
+function parseEvents(anchor: number): Event[] {
   return parseCsv(csvEmbedded.events).map((r) => {
-    const s: Sortie = {
+    const s: Event = {
       id: r.id,
       conversationId: r.conversationId,
       title: r.title,
@@ -113,7 +113,7 @@ function parseEvents(anchor: number): Sortie[] {
       priceLabel: r.priceLabel,
       participantCount: csvNum(r.participantCount),
       participantMax: csvNum(r.participantMax),
-      cardStatus: r.cardStatus as SortieCardStatus,
+      cardStatus: r.cardStatus as EventCardStatus,
       isFavorite: csvBool(r.isFavorite),
       dateKey: r.dateKey.trim(),
       sectionDateLabel: r.sectionDateLabel,
@@ -161,6 +161,87 @@ function parseProfileVisits(anchor: number): MockProfileVisit[] {
   });
 }
 
+export type ProfileMeRow = {
+  displayName: string;
+  avatarUrl: string;
+  memberSince: string;
+  reliabilityScore: number;
+  isPremiumSeed: boolean;
+  isAdminSeed: boolean;
+};
+
+export type ProfileFriendRow = {
+  profilId: string;
+  name: string;
+  imageUrl: string;
+  eventsInCommon: number;
+};
+
+export type TierLimits = {
+  maxParticipants: number;
+  maxRegistrations: number;
+  maxFavorites: number;
+  maxActiveEvents: number;
+};
+
+function parseProfileMe(): ProfileMeRow {
+  const r = parseCsv(csvEmbedded.current_user)[0];
+  if (!r) {
+    return {
+      displayName: 'Thomas R.',
+      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=800',
+      memberSince: '2024',
+      reliabilityScore: 4.9,
+      isPremiumSeed: true,
+      isAdminSeed: false,
+    };
+  }
+  return {
+    displayName: r.displayName,
+    avatarUrl: r.avatarUrl,
+    memberSince: r.memberSince,
+    reliabilityScore: csvNum(r.reliabilityScore, 4.9),
+    isPremiumSeed: csvBool(r.isPremiumSeed),
+    isAdminSeed: csvBool(r.isAdminSeed),
+  };
+}
+
+function parseProfileFriends(): ProfileFriendRow[] {
+  return parseCsv(csvEmbedded.profile_friends).map((r) => ({
+    profilId: r.profilId.trim(),
+    name: r.name,
+    imageUrl: r.imageUrl,
+    eventsInCommon: csvNum(r.eventsInCommon),
+  }));
+}
+
+function parseLimitsByTier(): { free: TierLimits; premium: TierLimits } {
+  const free: TierLimits = {
+    maxParticipants: 8,
+    maxRegistrations: 3,
+    maxFavorites: 3,
+    maxActiveEvents: 1,
+  };
+  const premium: TierLimits = {
+    maxParticipants: 20,
+    maxRegistrations: 10,
+    maxFavorites: 10,
+    maxActiveEvents: 999,
+  };
+  for (const r of parseCsv(csvEmbedded.limits_by_tier)) {
+    const tier = (r.tier ?? '').toLowerCase();
+    const block: TierLimits = {
+      maxParticipants: csvNum(r.maxParticipants),
+      maxRegistrations: csvNum(r.maxRegistrations),
+      maxFavorites: csvNum(r.maxFavorites),
+      maxActiveEvents: csvNum(r.maxActiveEvents),
+    };
+    if (tier === 'free') Object.assign(free, block);
+    if (tier === 'premium') Object.assign(premium, block);
+  }
+  return { free, premium };
+}
+
 function parseSuggestionProfiles(): SuggestionProfile[] {
   return parseCsv(csvEmbedded.suggestion_profiles).map((r) => ({
     id: r.id,
@@ -193,10 +274,14 @@ export const mockMessagingSeed = {
   conversations: seededConversations,
   membersByConversation: parseMembers(),
   messagesByConversation: ensureMessageBuckets(seededConversations, parseMessages(ANCHOR_MS)),
-  sorties: parseEvents(ANCHOR_MS),
+  events: parseEvents(ANCHOR_MS),
   visitesTabBadgeCount: csvNum(appSettings.visitesTabBadgeCount, 5),
 };
 
 export const mockProfileVisits: MockProfileVisit[] = parseProfileVisits(ANCHOR_MS);
 
 export const mockSuggestionProfilesFromCsv: SuggestionProfile[] = parseSuggestionProfiles();
+
+export const profileMe = parseProfileMe();
+export const profileFriendsFromCsv: ProfileFriendRow[] = parseProfileFriends();
+export const limitsByTier = parseLimitsByTier();

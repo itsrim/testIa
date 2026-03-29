@@ -1,11 +1,13 @@
 import { Design } from '@/constants/design';
+import { useProfileSettings } from '@/context/ProfileSettingsContext';
 import { useMessaging } from '@/context/MessagingContext';
+import { todayDateKey } from '@/lib/todayDateKey';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -73,16 +75,27 @@ function FieldLabel({
   );
 }
 
-export default function CreerSortieScreen() {
+export default function CreateEventScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { conversations, addSortie } = useMessaging();
+  const { conversations, addEvent, events } = useMessaging();
+  const { getLimits, isPremium, isRestricted } = useProfileSettings();
 
   const [title, setTitle] = useState('');
   const [dateFr, setDateFr] = useState('29/03/2026');
   const [timeShort, setTimeShort] = useState('19:00');
   const [location, setLocation] = useState('');
-  const [maxParticipants, setMaxParticipants] = useState('20');
+  const limits = getLimits();
+  const [maxParticipants, setMaxParticipants] = useState(String(getLimits().maxParticipants));
+
+  useEffect(() => {
+    const cap = limits.maxParticipants;
+    setMaxParticipants((p) => {
+      const n = parseInt(p, 10);
+      if (!Number.isFinite(n)) return String(cap);
+      return String(Math.min(Math.max(1, n), cap));
+    });
+  }, [isPremium, limits.maxParticipants]);
   const [description, setDescription] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [hideAddress, setHideAddress] = useState(false);
@@ -136,9 +149,28 @@ export default function CreerSortieScreen() {
       return;
     }
 
+    const today = todayDateKey();
+    const activeOrganizer = events.filter(
+      (e) => e.cardStatus === 'organisateur' && e.dateKey >= today,
+    );
+    if (
+      !isPremium &&
+      isRestricted('limitEventCreation') &&
+      activeOrganizer.length >= limits.maxActiveEvents
+    ) {
+      Alert.alert(
+        'Limite atteinte',
+        `En mode gratuit vous ne pouvez avoir que ${limits.maxActiveEvents} sortie active à la fois (vous en avez ${activeOrganizer.length}). Passez en Premium dans l’onglet Profil.`,
+      );
+      return;
+    }
+
+    const maxCap = limits.maxParticipants;
+    const cappedMax = Math.min(maxN, maxCap);
+
     const dateKey = toIsoDateKey(parsed);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    addSortie({
+    addEvent({
       conversationId,
       title: t,
       dateLabel: frenchShortDate(parsed),
@@ -147,7 +179,7 @@ export default function CreerSortieScreen() {
       timeShort: timeShort.trim() || '19:00',
       priceLabel: 'Gratuit',
       imageUri: imageUri ?? undefined,
-      participantMax: maxN,
+      participantMax: cappedMax,
       dateKey,
       sectionDateLabel: frenchSectionLabel(parsed),
       cardStatus: 'organisateur',

@@ -1,6 +1,6 @@
-import type { Sortie } from '@/types/messaging';
+import type { Event } from '@/types/messaging';
 
-export type SortieParticipantDetail = {
+export type EventParticipantDetail = {
   id: string;
   displayName: string;
   avatarUrl: string;
@@ -9,17 +9,17 @@ export type SortieParticipantDetail = {
   isSelf: boolean;
 };
 
-export type SortieWaitingMember = {
+export type EventWaitingMember = {
   id: string;
   displayName: string;
   rating: number;
   avatarUrl?: string;
 };
 
-export type SortieDetailRich = {
+export type EventDetailRich = {
   descriptionParagraphs: string[];
-  participants: SortieParticipantDetail[];
-  waitingList: SortieWaitingMember[];
+  participants: EventParticipantDetail[];
+  waitingList: EventWaitingMember[];
   /** Affiche l’icône retirer sur les lignes des autres (vue organisateur). */
   showRemoveOtherParticipants: boolean;
 };
@@ -29,7 +29,7 @@ function av(name: string, bg: string): string {
 }
 
 /** Détail riche par id d’événement (`events.csv`). */
-const SEED: Record<string, SortieDetailRich> = {
+const SEED: Record<string, EventDetailRich> = {
   e7: {
     descriptionParagraphs: [
       'Atelier peinture collective à La Pachanga le 26 mars. Matériel fourni sur place, tenue conseillée confortable.',
@@ -125,22 +125,22 @@ const SEED: Record<string, SortieDetailRich> = {
   },
 };
 
-function defaultRich(sortie: Sortie): SortieDetailRich {
+function defaultRich(event: Event): EventDetailRich {
   return {
     descriptionParagraphs: [
-      `Événement « ${sortie.title} » le ${sortie.dateLabel}. Rejoignez-nous pour une expérience conviviale !`,
-      sortie.notes?.trim() ??
+      `Événement « ${event.title} » le ${event.dateLabel}. Rejoignez-nous pour une expérience conviviale !`,
+      event.notes?.trim() ??
         'Les inscriptions et le fil de discussion sont disponibles depuis la conversation du groupe.',
     ],
     participants: [],
     waitingList: [],
-    showRemoveOtherParticipants: sortie.cardStatus === 'organisateur',
+    showRemoveOtherParticipants: event.cardStatus === 'organisateur',
   };
 }
 
-export function getSortieDetailRich(sortie: Sortie): SortieDetailRich {
-  const base = SEED[sortie.id] ?? defaultRich(sortie);
-  if (base.participants.length === 0 && sortie.participantCount > 0) {
+export function getEventDetailRich(event: Event): EventDetailRich {
+  const base = SEED[event.id] ?? defaultRich(event);
+  if (base.participants.length === 0 && event.participantCount > 0) {
     return {
       ...base,
       participants: [

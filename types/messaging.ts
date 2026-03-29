@@ -57,9 +57,9 @@ export interface Message {
   mediaKind?: MessageMediaKind;
 }
 
-export type SortieCardStatus = 'inscrit' | 'organisateur' | 'join';
+export type EventCardStatus = 'inscrit' | 'organisateur' | 'join';
 
-export interface Sortie {
+export interface Event {
   id: string;
   conversationId: string;
   title: string;
@@ -72,7 +72,7 @@ export interface Sortie {
   priceLabel: string;
   participantCount: number;
   participantMax: number;
-  cardStatus: SortieCardStatus;
+  cardStatus: EventCardStatus;
   isFavorite: boolean;
   /** ISO YYYY-MM-DD — tri chronologique et filtre calendrier (données `events.csv`). */
   dateKey: string;

@@ -1,7 +1,7 @@
 import { Design } from '@/constants/design';
 import { useMessaging } from '@/context/MessagingContext';
-import { getSortieDetailRich } from '@/data/sortieDetailSeed';
-import type { SortieParticipantDetail } from '@/data/sortieDetailSeed';
+import { getEventDetailRich } from '@/data/eventDetailSeed';
+import type { EventParticipantDetail } from '@/data/eventDetailSeed';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -50,55 +50,55 @@ function RatingBar({ value }: { value: number }) {
   );
 }
 
-function participantLabel(p: SortieParticipantDetail): string {
+function participantLabel(p: EventParticipantDetail): string {
   if (p.isSelf && p.isOrganizer) return 'Moi (Organisateur)';
   if (p.isSelf) return 'Moi';
   return p.displayName;
 }
 
-export default function SortieDetailScreen() {
+export default function EventDetailScreen() {
   const raw = useLocalSearchParams<{ id: string }>();
-  const sortieId = Array.isArray(raw.id) ? raw.id[0] : raw.id;
+  const eventId = Array.isArray(raw.id) ? raw.id[0] : raw.id;
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { getSortieById, joinSortie } = useMessaging();
+  const { getEventById, joinEvent } = useMessaging();
 
-  const sortie = sortieId ? getSortieById(sortieId) : undefined;
-  const rich = useMemo(() => (sortie ? getSortieDetailRich(sortie) : null), [sortie]);
+  const event = eventId ? getEventById(eventId) : undefined;
+  const rich = useMemo(() => (event ? getEventDetailRich(event) : null), [event]);
 
   const [waitingToggle, setWaitingToggle] = useState<Record<string, boolean>>({});
 
   const isRegistered = useMemo(
     () =>
-      sortie?.cardStatus === 'inscrit' || sortie?.cardStatus === 'organisateur',
-    [sortie?.cardStatus],
+      event?.cardStatus === 'inscrit' || event?.cardStatus === 'organisateur',
+    [event?.cardStatus],
   );
 
   const isFull = useMemo(
     () =>
-      sortie ? sortie.participantCount >= sortie.participantMax : false,
-    [sortie],
+      event ? event.participantCount >= event.participantMax : false,
+    [event],
   );
 
   const canJoin = useMemo(
-    () => sortie?.cardStatus === 'join' && !isFull,
-    [sortie?.cardStatus, isFull],
+    () => event?.cardStatus === 'join' && !isFull,
+    [event?.cardStatus, isFull],
   );
 
   const openChat = useCallback(() => {
-    if (!sortie || !isRegistered) return;
-    router.push(`/chat/${sortie.conversationId}`);
-  }, [router, sortie, isRegistered]);
+    if (!event || !isRegistered) return;
+    router.push(`/chat/${event.conversationId}`);
+  }, [router, event, isRegistered]);
 
   const onJoin = useCallback(() => {
-    if (!sortie || !canJoin) return;
-    joinSortie(sortie.id);
-  }, [sortie, canJoin, joinSortie]);
+    if (!event || !canJoin) return;
+    joinEvent(event.id);
+  }, [event, canJoin, joinEvent]);
 
-  if (!sortie || !rich) {
+  if (!event || !rich) {
     return (
       <View style={[styles.fallback, { paddingTop: insets.top + 24 }]}>
-        <Text style={styles.fallbackText}>Sortie introuvable.</Text>
+        <Text style={styles.fallbackText}>Event not found.</Text>
         <Pressable onPress={() => router.back()} style={styles.fallbackBtn}>
           <Text style={styles.fallbackBtnText}>Retour</Text>
         </Pressable>
@@ -106,9 +106,9 @@ export default function SortieDetailScreen() {
     );
   }
 
-  const priceFooter = formatPriceFooter(sortie.priceLabel);
-  const priceSub = formatPriceSubheader(sortie.priceLabel);
-  const dateTimeLine = `${sortie.dateLabel}, ${sortie.timeShort}`;
+  const priceFooter = formatPriceFooter(event.priceLabel);
+  const priceSub = formatPriceSubheader(event.priceLabel);
+  const dateTimeLine = `${event.dateLabel}, ${event.timeShort}`;
 
   const footerActionLabel = isRegistered
     ? 'Inscrit ✓'
@@ -126,7 +126,7 @@ export default function SortieDetailScreen() {
           paddingBottom: 120 + insets.bottom,
         }}>
         <View style={styles.heroWrap}>
-          <Image source={{ uri: sortie.imageUri }} style={styles.heroImg} contentFit="cover" />
+          <Image source={{ uri: event.imageUri }} style={styles.heroImg} contentFit="cover" />
           <Pressable
             onPress={() => router.back()}
             style={[styles.backBtn, { top: insets.top + 8 }]}
@@ -139,18 +139,18 @@ export default function SortieDetailScreen() {
         </View>
 
         <View style={[styles.sheet, { marginTop: -CARD_RADIUS }]}>
-          <Text style={styles.title}>{sortie.title}</Text>
+          <Text style={styles.title}>{event.title}</Text>
 
           <View style={styles.subHeaderRow}>
             <Text style={styles.subHeaderMuted}>{priceSub}</Text>
             <Text style={styles.subHeaderMuted}>
-              {sortie.participantCount} participant{sortie.participantCount > 1 ? 's' : ''}
+              {event.participantCount} participant{event.participantCount > 1 ? 's' : ''}
             </Text>
           </View>
 
           <View style={styles.infoRow}>
             <Ionicons name="location-outline" size={18} color={Design.textSecondary} />
-            <Text style={styles.infoText}>{sortie.location}</Text>
+            <Text style={styles.infoText}>{event.location}</Text>
           </View>
           <View style={styles.infoRow}>
             <Ionicons name="time-outline" size={18} color={Design.textSecondary} />
@@ -167,13 +167,13 @@ export default function SortieDetailScreen() {
             <View style={styles.block}>
               <View style={styles.blockHeader}>
                 <Text style={styles.blockTitle}>
-                  Participants ({sortie.participantCount}/{sortie.participantMax})
+                  Participants ({event.participantCount}/{event.participantMax})
                 </Text>
                 <Pressable
                   onPress={() =>
                     Alert.alert(
                       'Participants',
-                      `Total : ${sortie.participantCount} sur ${sortie.participantMax} (démo).`,
+                      `Total : ${event.participantCount} sur ${event.participantMax} (démo).`,
                     )
                   }
                   hitSlop={8}>

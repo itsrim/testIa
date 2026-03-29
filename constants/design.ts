@@ -1,4 +1,4 @@
-/** Design system — thème sombre type maquettes messagerie / sorties */
+/** Design system — thème sombre type maquettes messagerie / events */
 export const Design = {
   bg: '#000000',
   textPrimary: '#FFFFFF',
@@ -11,7 +11,7 @@ export const Design = {
   tabBarBg: 'rgba(25, 30, 25, 0.95)',
   tabBarBorder: 'rgba(255, 255, 255, 0.05)',
   gradientHeaderChat: ['#FF6B35', '#FF4081', '#AB47BC'] as const,
-  gradientHeaderSorties: ['#FFEB3B', '#FF4081', '#E91E63'] as const,
+  gradientHeaderEvents: ['#FFEB3B', '#FF4081', '#E91E63'] as const,
   cardOverlay: 'rgba(0,0,0,0.55)',
   blueSoft: 'rgba(100, 149, 237, 0.35)',
   tabBarBottomOffset: 20,
