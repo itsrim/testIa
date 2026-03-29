@@ -29,6 +29,13 @@
       "expo-router",
       "expo-notifications",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "L’app accède à vos photos et vidéos pour les joindre aux messages.",
+          "cameraPermission": "L’app peut utiliser l’appareil photo pour joindre une image à un message."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",

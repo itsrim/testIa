@@ -5,6 +5,13 @@ export interface GroupMember {
   displayName: string;
   isSelf: boolean;
   avatarGradient: readonly [string, string];
+  /** `true` = dans votre liste d’amis ; utilisé pour l’accès aux messages de groupe. */
+  isFriendWithMe?: boolean;
+}
+
+/** Groupe : l’historique est lisible seulement si au moins un autre membre est ami. */
+export function groupHasFriendForMessages(members: GroupMember[]): boolean {
+  return members.some((m) => !m.isSelf && m.isFriendWithMe === true);
 }
 
 export interface GroupChatSettings {
@@ -37,6 +44,14 @@ export interface StoryHighlight {
   gradient: readonly [string, string];
 }
 
+export type MessageMediaKind = 'image' | 'video';
+
+/** Média choisi avant envoi (même forme que les champs stockés sur `Message`). */
+export interface MessageMediaAttachment {
+  uri: string;
+  kind: MessageMediaKind;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -44,6 +59,8 @@ export interface Message {
   sentAt: number;
   isOwn: boolean;
   authorName?: string;
+  mediaUri?: string;
+  mediaKind?: MessageMediaKind;
 }
 
 export type SortieCardStatus = 'inscrit' | 'organisateur' | 'join';

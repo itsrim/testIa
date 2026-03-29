@@ -12,6 +12,8 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Design } from '@/constants/design';
+import { useMessaging } from '@/context/MessagingContext';
+import { formatBadgeCount } from '@/lib/formatBadgeCount';
 
 const TAB_CONFIG: Record<
   string,
@@ -50,11 +52,14 @@ function TabBarItem({
   isFocused,
   descriptors,
   navigation,
+  tabBadge,
 }: {
   route: BottomTabBarProps['state']['routes'][number];
   isFocused: boolean;
   descriptors: BottomTabBarProps['descriptors'];
   navigation: BottomTabBarProps['navigation'];
+  /** Pastille non lus (ex. onglet Chat) */
+  tabBadge?: number;
 }) {
   const { options } = descriptors[route.key];
   const cfg = TAB_CONFIG[route.name] ?? {
@@ -98,11 +103,29 @@ function TabBarItem({
       <Animated.View style={[styles.item, isFocused && styles.itemActive, animStyle]}>
         {isFocused ? (
           <>
-            <Ionicons name={cfg.icon} size={20} color={Design.tabActiveText} />
+            <View style={styles.iconBadgeWrap}>
+              <Ionicons name={cfg.icon} size={20} color={Design.tabActiveText} />
+              {tabBadge != null && tabBadge > 0 ? (
+                <View style={[styles.tabUnreadBadge, styles.tabUnreadBadgeOnLight]}>
+                  <Text style={styles.tabUnreadBadgeText} allowFontScaling={false}>
+                    {formatBadgeCount(tabBadge)}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
             <Text style={styles.labelActive}>{cfg.label}</Text>
           </>
         ) : (
-          <Ionicons name={cfg.icon} size={22} color={Design.textPrimary} />
+          <View style={styles.iconBadgeWrap}>
+            <Ionicons name={cfg.icon} size={22} color={Design.textPrimary} />
+            {tabBadge != null && tabBadge > 0 ? (
+              <View style={styles.tabUnreadBadge}>
+                <Text style={styles.tabUnreadBadgeText} allowFontScaling={false}>
+                  {formatBadgeCount(tabBadge)}
+                </Text>
+              </View>
+            ) : null}
+          </View>
         )}
       </Animated.View>
     </Pressable>
@@ -112,6 +135,7 @@ function TabBarItem({
 export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, 16);
+  const { messagesTabBadgeCount } = useMessaging();
 
   return (
     <View style={[styles.wrapper, { paddingBottom: bottomPad }]}>
@@ -124,6 +148,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
             isFocused={state.index === index}
             descriptors={descriptors}
             navigation={navigation}
+            tabBadge={route.name === 'chat' ? messagesTabBadgeCount : undefined}
           />
         ))}
       </View>
@@ -202,5 +227,32 @@ const styles = StyleSheet.create({
     color: Design.tabActiveText,
     fontSize: 14,
     fontWeight: '700',
+  },
+  iconBadgeWrap: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabUnreadBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: Design.badgeRed,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Design.tabBarBg,
+  },
+  tabUnreadBadgeOnLight: {
+    borderColor: Design.tabActiveBg,
+  },
+  tabUnreadBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
   },
 });

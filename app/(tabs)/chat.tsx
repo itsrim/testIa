@@ -1,5 +1,6 @@
 import { Design } from '@/constants/design';
 import { useMessaging } from '@/context/MessagingContext';
+import { formatBadgeCount } from '@/lib/formatBadgeCount';
 import type { Conversation } from '@/types/messaging';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -104,7 +105,7 @@ function GroupStoryStripItem({
         </LinearGradient>
         {badge > 0 ? (
           <View style={styles.storyBadge}>
-            <Text style={styles.storyBadgeText}>{badge > 9 ? '9+' : String(badge)}</Text>
+            <Text style={styles.storyBadgeText}>{formatBadgeCount(badge)}</Text>
           </View>
         ) : null}
       </View>
@@ -145,7 +146,7 @@ function ListAvatar({ item }: { item: Conversation }) {
         </LinearGradient>
         {item.unreadCount > 0 ? (
           <View style={styles.listBadge}>
-            <Text style={styles.listBadgeText}>{item.unreadCount > 9 ? '9+' : item.unreadCount}</Text>
+            <Text style={styles.listBadgeText}>{formatBadgeCount(item.unreadCount)}</Text>
           </View>
         ) : null}
       </View>
@@ -162,14 +163,14 @@ function ListAvatar({ item }: { item: Conversation }) {
       </LinearGradient>
       {item.unreadCount > 0 ? (
         <View style={styles.listBadge}>
-          <Text style={styles.listBadgeText}>{item.unreadCount > 9 ? '9+' : item.unreadCount}</Text>
+          <Text style={styles.listBadgeText}>{formatBadgeCount(item.unreadCount)}</Text>
         </View>
       ) : null}
     </View>
   );
 }
 
-function ConversationRow({ item }: { item: Conversation }) {
+function ConversationRow({ item, previewText }: { item: Conversation; previewText: string }) {
   const router = useRouter();
   const isGroup = item.type === 'group';
 
@@ -198,7 +199,7 @@ function ConversationRow({ item }: { item: Conversation }) {
             <Text style={styles.time}>{formatRelativeTime(item.updatedAt)}</Text>
           </View>
           <Text style={styles.preview} numberOfLines={2}>
-            {item.lastMessagePreview}
+            {previewText}
           </Text>
         </View>
       </View>
@@ -235,7 +236,7 @@ function SubTabPill({
               badgeVariant === 'gold' ? styles.subTabBadgeGold : styles.subTabBadgeRed,
             ]}>
             <Text style={styles.subTabBadgeText} allowFontScaling={false}>
-              {badge > 99 ? '99+' : badge}
+              {formatBadgeCount(badge)}
             </Text>
           </View>
         ) : null}
@@ -247,7 +248,8 @@ function SubTabPill({
 export default function ChatListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { conversations, messagesTabBadgeCount, visitesTabBadgeCount } = useMessaging();
+  const { conversations, messagesTabBadgeCount, visitesTabBadgeCount, canViewGroupMessages } =
+    useMessaging();
   const [sub, setSub] = useState<SubTab>('messages');
 
   const sorted = useMemo(
@@ -334,7 +336,16 @@ export default function ChatListScreen() {
             maxWidth: '100%',
           }}
           style={styles.list}
-          renderItem={({ item }) => <ConversationRow item={item} />}
+          renderItem={({ item }) => (
+            <ConversationRow
+              item={item}
+              previewText={
+                item.type === 'group' && !canViewGroupMessages(item.id)
+                  ? '🔒 Invitez un ami dans ce groupe pour voir les messages.'
+                  : item.lastMessagePreview
+              }
+            />
+          )}
         />
       ) : (
         <View style={[styles.placeholder, { paddingBottom: Design.contentBottomSpace }]}>

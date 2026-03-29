@@ -1,12 +1,16 @@
 import { Design } from '@/constants/design';
 import { useMessaging } from '@/context/MessagingContext';
-import type { Conversation, Message } from '@/types/messaging';
+import type { Conversation, Message, MessageMediaAttachment } from '@/types/messaging';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
+import { Video, ResizeMode } from 'expo-av';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -54,6 +58,8 @@ function HeaderAvatar({ conversation }: { conversation: Conversation }) {
   );
 }
 
+const BUBBLE_MEDIA_W = 220;
+
 function MessageBubble({
   message,
   showAuthor,
@@ -63,6 +69,8 @@ function MessageBubble({
 }) {
   const own = message.isOwn;
   const time = formatMessageClock(message.sentAt);
+  const hasMedia = Boolean(message.mediaUri && message.mediaKind);
+  const bodyText = message.text.trim();
 
   return (
     <View style={[styles.bubbleWrap, own ? styles.bubbleWrapOwn : styles.bubbleWrapOther]}>
@@ -70,7 +78,26 @@ function MessageBubble({
         <Text style={styles.author}>{message.authorName}</Text>
       ) : null}
       <View style={[styles.bubble, own ? styles.bubbleOwn : styles.bubbleOther]}>
-        <Text style={[styles.bubbleMsg, own ? styles.bubbleMsgOwn : styles.bubbleMsgOther]}>{message.text}</Text>
+        {hasMedia && message.mediaUri && message.mediaKind === 'image' ? (
+          <Image
+            source={{ uri: message.mediaUri }}
+            style={styles.bubbleImage}
+            contentFit="cover"
+            accessibilityLabel="Image jointe"
+          />
+        ) : null}
+        {hasMedia && message.mediaUri && message.mediaKind === 'video' ? (
+          <Video
+            source={{ uri: message.mediaUri }}
+            style={styles.bubbleVideo}
+            useNativeControls
+            resizeMode={ResizeMode.CONTAIN}
+            isLooping={false}
+          />
+        ) : null}
+        {bodyText ? (
+          <Text style={[styles.bubbleMsg, own ? styles.bubbleMsgOwn : styles.bubbleMsgOther]}>{bodyText}</Text>
+        ) : null}
         <Text style={[styles.bubbleTime, own ? styles.bubbleTimeOwn : styles.bubbleTimeOther]}>{time}</Text>
       </View>
     </View>
@@ -84,11 +111,18 @@ export default function ChatScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { getConversation, messagesByConversation, sendMessage, markConversationRead } = useMessaging();
+  const {
+    getConversation,
+    messagesByConversation,
+    sendMessage,
+    markConversationRead,
+    canViewGroupMessages,
+  } = useMessaging();
   const conversation = id ? getConversation(id) : undefined;
   const messages = id ? messagesByConversation[id] ?? [] : [];
 
   const [draft, setDraft] = useState('');
+  const [pendingMedia, setPendingMedia] = useState<MessageMediaAttachment | null>(null);
   const listRef = useRef<FlatList<Message>>(null);
 
   useFocusEffect(
@@ -166,11 +200,36 @@ export default function ChatScreen() {
     });
   }, [conversation, navigation, id, router]);
 
+  const pickFromLibrary = useCallback(async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(
+        'Accès à la médiathèque',
+        'Autorisez l’accès aux photos dans les réglages pour joindre une image ou une vidéo.',
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      allowsMultipleSelection: false,
+      quality: 0.85,
+      videoMaxDuration: 180,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const kind: MessageMediaAttachment['kind'] = asset.type === 'video' ? 'video' : 'image';
+    setPendingMedia({ uri: asset.uri, kind });
+  }, []);
+
   const onSend = () => {
     if (!id) return;
-    sendMessage(id, draft);
+    if (!draft.trim() && !pendingMedia) return;
+    sendMessage(id, draft, pendingMedia ?? undefined);
     setDraft('');
+    setPendingMedia(null);
   };
+
+  const canSend = Boolean(draft.trim() || pendingMedia);
 
   if (!id || !conversation) {
     return (
@@ -180,54 +239,109 @@ export default function ChatScreen() {
     );
   }
 
+  const canViewMessages =
+    conversation.type !== 'group' || canViewGroupMessages(id);
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-      <FlatList
-        ref={listRef}
-        data={messages}
-        keyExtractor={(m) => m.id}
-        contentContainerStyle={{
-          paddingHorizontal: 14,
-          paddingTop: 12,
-          paddingBottom: 12,
-          flexGrow: 1,
-        }}
-        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-        renderItem={({ item, index }) => {
-          const prev = index > 0 ? messages[index - 1] : undefined;
-          const showAuthor =
-            conversation.type === 'group' &&
-            !item.isOwn &&
-            (!prev || prev.isOwn || prev.authorName !== item.authorName);
-          return <MessageBubble message={item} showAuthor={showAuthor} />;
-        }}
-      />
-      <View
-        style={[
-          styles.inputRow,
-          {
-            paddingBottom: Math.max(insets.bottom, 12),
-          },
-        ]}>
-        <TextInput
-          value={draft}
-          onChangeText={setDraft}
-          placeholder="Écrivez un message…"
-          placeholderTextColor="#6C6C70"
-          style={styles.input}
-          multiline
-          maxLength={2000}
-        />
-        <Pressable
-          onPress={onSend}
-          disabled={!draft.trim()}
-          style={[styles.sendCircle, !draft.trim() && styles.sendCircleDisabled]}>
-          <Ionicons name="send" size={18} color={draft.trim() ? '#fff' : '#6C6C70'} />
-        </Pressable>
-      </View>
+      {canViewMessages ? (
+        <>
+          <FlatList
+            ref={listRef}
+            data={messages}
+            keyExtractor={(m) => m.id}
+            contentContainerStyle={{
+              paddingHorizontal: 14,
+              paddingTop: 12,
+              paddingBottom: 12,
+              flexGrow: 1,
+            }}
+            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+            renderItem={({ item, index }) => {
+              const prev = index > 0 ? messages[index - 1] : undefined;
+              const showAuthor =
+                conversation.type === 'group' &&
+                !item.isOwn &&
+                (!prev || prev.isOwn || prev.authorName !== item.authorName);
+              return <MessageBubble message={item} showAuthor={showAuthor} />;
+            }}
+          />
+          {pendingMedia ? (
+            <View style={styles.pendingMediaBar}>
+              {pendingMedia.kind === 'image' ? (
+                <Image
+                  source={{ uri: pendingMedia.uri }}
+                  style={styles.pendingThumb}
+                  contentFit="cover"
+                  accessibilityLabel="Aperçu du média à envoyer"
+                />
+              ) : (
+                <View style={styles.pendingVideoBadge}>
+                  <Ionicons name="videocam" size={26} color="#FF4B6E" />
+                </View>
+              )}
+              <Pressable
+                onPress={() => setPendingMedia(null)}
+                hitSlop={10}
+                style={styles.pendingClear}
+                accessibilityLabel="Retirer le média"
+                accessibilityRole="button">
+                <Ionicons name="close-circle" size={26} color={Design.textSecondary} />
+              </Pressable>
+            </View>
+          ) : null}
+          <View
+            style={[
+              styles.inputRow,
+              {
+                paddingBottom: Math.max(insets.bottom, 12),
+              },
+            ]}>
+            <Pressable
+              onPress={pickFromLibrary}
+              style={styles.attachBtn}
+              accessibilityLabel="Joindre une photo ou une vidéo"
+              accessibilityRole="button">
+              <Ionicons name="image-outline" size={24} color={Design.textPrimary} />
+            </Pressable>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Écrivez un message…"
+              placeholderTextColor="#6C6C70"
+              style={styles.input}
+              multiline
+              maxLength={2000}
+            />
+            <Pressable
+              onPress={onSend}
+              disabled={!canSend}
+              style={[styles.sendCircle, !canSend && styles.sendCircleDisabled]}>
+              <Ionicons name="send" size={18} color={canSend ? '#fff' : '#6C6C70'} />
+            </Pressable>
+          </View>
+        </>
+      ) : (
+        <View style={[styles.lockPane, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+          <Ionicons name="lock-closed-outline" size={52} color={Design.textSecondary} />
+          <Text style={styles.lockTitle}>Messages masqués</Text>
+          <Text style={styles.lockBody}>
+            Pour lire cette discussion de groupe, au moins un membre (hors vous) doit être dans vos amis.
+            Invitez un ami depuis les paramètres du groupe.
+          </Text>
+          <Pressable
+            onPress={() => router.push(`/chat/${id}/parametres`)}
+            style={styles.lockCta}
+            accessibilityRole="button"
+            accessibilityLabel="Ouvrir les paramètres du groupe">
+            <Text style={styles.lockCtaText}>Paramètres du groupe</Text>
+            <Ionicons name="chevron-forward" size={20} color="#FF4B6E" />
+          </Pressable>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -248,6 +362,44 @@ const styles = StyleSheet.create({
   },
   muted: {
     color: Design.textSecondary,
+  },
+  lockPane: {
+    flex: 1,
+    paddingHorizontal: 28,
+    paddingTop: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+  },
+  lockTitle: {
+    color: Design.textPrimary,
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  lockBody: {
+    color: Design.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    maxWidth: 320,
+  },
+  lockCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    backgroundColor: '#1C1C1E',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#333',
+  },
+  lockCtaText: {
+    color: Design.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   headerTitleRow: {
     flexDirection: 'row',
@@ -374,6 +526,20 @@ const styles = StyleSheet.create({
   bubbleMsgOther: {
     color: '#fff',
   },
+  bubbleImage: {
+    width: BUBBLE_MEDIA_W,
+    height: 148,
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: '#000',
+  },
+  bubbleVideo: {
+    width: BUBBLE_MEDIA_W,
+    height: 168,
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: '#000',
+  },
   bubbleTime: {
     fontSize: 11,
     marginTop: 6,
@@ -385,13 +551,52 @@ const styles = StyleSheet.create({
   bubbleTimeOther: {
     color: '#8E8E93',
   },
+  pendingMediaBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+    gap: 10,
+    backgroundColor: Design.bg,
+  },
+  pendingThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: '#1C1C1E',
+  },
+  pendingVideoBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: '#1C1C1E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#333',
+  },
+  pendingClear: {
+    marginLeft: 'auto',
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 12,
     paddingTop: 10,
     backgroundColor: Design.bg,
-    gap: 10,
+    gap: 8,
+  },
+  attachBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#1C1C1E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#333',
   },
   input: {
     flex: 1,

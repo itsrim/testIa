@@ -6,17 +6,29 @@ import React, {
   useState,
 } from 'react';
 import { playIncomingMessageFeedback } from '@/lib/playIncomingMessageFeedback';
-import type {
-  Conversation,
-  GroupChatSettings,
-  GroupMember,
-  Message,
-  Sortie,
-  StoryHighlight,
+import {
+  groupHasFriendForMessages,
+  type Conversation,
+  type GroupChatSettings,
+  type GroupMember,
+  type Message,
+  type MessageMediaAttachment,
+  type Sortie,
+  type StoryHighlight,
 } from '@/types/messaging';
 
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function lastPreviewForOutgoing(trimmed: string, media?: MessageMediaAttachment): string {
+  if (media && trimmed) {
+    return media.kind === 'image' ? `📷 ${trimmed}` : `🎬 ${trimmed}`;
+  }
+  if (media) {
+    return media.kind === 'image' ? '📷 Photo' : '🎬 Vidéo';
+  }
+  return trimmed;
 }
 
 const now = Date.now();
@@ -110,18 +122,30 @@ const seedMembersByConversation: Record<string, GroupMember[]> = {
     { id: 'c2-a', displayName: 'Antoine', isSelf: false, avatarGradient: ['#5C6BC0', '#3949AB'] },
     { id: 'c2-b', displayName: 'Léa', isSelf: false, avatarGradient: ['#EC407A', '#AD1457'] },
     { id: 'c2-c', displayName: 'Kevin', isSelf: false, avatarGradient: ['#FFA726', '#F57C00'] },
-    { id: 'c2-d', displayName: 'Inès', isSelf: false, avatarGradient: ['#26A69A', '#00897B'] },
+    {
+      id: 'c2-d',
+      displayName: 'Inès',
+      isSelf: false,
+      avatarGradient: ['#26A69A', '#00897B'],
+      isFriendWithMe: true,
+    },
     { id: 'c2-me', displayName: 'Moi', isSelf: true, avatarGradient: ['#78909C', '#546E7A'] },
   ],
   c3: [
-    { id: 'c3-a', displayName: 'Léo', isSelf: false, avatarGradient: ['#7E57C2', '#5E35B1'] },
+    {
+      id: 'c3-a',
+      displayName: 'Léo',
+      isSelf: false,
+      avatarGradient: ['#7E57C2', '#5E35B1'],
+      isFriendWithMe: true,
+    },
     { id: 'c3-b', displayName: 'Camille', isSelf: false, avatarGradient: ['#FF7043', '#E64A19'] },
     { id: 'c3-c', displayName: 'Hugo', isSelf: false, avatarGradient: ['#29B6F6', '#0277BD'] },
     { id: 'c3-me', displayName: 'Moi', isSelf: true, avatarGradient: ['#78909C', '#546E7A'] },
   ],
   c4: [
-    { id: 'c4-a', displayName: 'Sam', isSelf: false, avatarGradient: ['#AB47BC', '#6A1B9A'] },
-    { id: 'c4-b', displayName: 'Alex', isSelf: false, avatarGradient: ['#26C6DA', '#00838F'] },
+    { id: 'c4-a', displayName: 'Sam', isSelf: false, avatarGradient: ['#AB47BC', '#6A1B9A'], isFriendWithMe: false },
+    { id: 'c4-b', displayName: 'Alex', isSelf: false, avatarGradient: ['#26C6DA', '#00838F'], isFriendWithMe: false },
     { id: 'c4-me', displayName: 'Moi', isSelf: true, avatarGradient: ['#78909C', '#546E7A'] },
   ],
 };
@@ -271,7 +295,7 @@ type MessagingContextValue = {
   conversations: Conversation[];
   getConversation: (id: string) => Conversation | undefined;
   messagesByConversation: Record<string, Message[]>;
-  sendMessage: (conversationId: string, text: string) => void;
+  sendMessage: (conversationId: string, text: string, media?: MessageMediaAttachment) => void;
   markConversationRead: (conversationId: string) => void;
   sorties: Sortie[];
   addSortie: (input: NewSortieInput) => void;
@@ -280,6 +304,8 @@ type MessagingContextValue = {
   messagesTabBadgeCount: number;
   visitesTabBadgeCount: number;
   getGroupMembers: (conversationId: string) => GroupMember[];
+  /** Groupe : `true` si au moins un autre membre est ami (sinon fil masqué). Les discussions directes : toujours `true`. */
+  canViewGroupMessages: (conversationId: string) => boolean;
   getGroupSettings: (conversationId: string) => GroupChatSettings;
   setGroupSettings: (conversationId: string, patch: Partial<GroupChatSettings>) => void;
   removeGroupMember: (conversationId: string, memberId: string) => void;
@@ -369,6 +395,15 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     [membersByConversation],
   );
 
+  const canViewGroupMessages = useCallback(
+    (conversationId: string) => {
+      const conv = conversations.find((c) => c.id === conversationId);
+      if (!conv || conv.type !== 'group') return true;
+      return groupHasFriendForMessages(membersByConversation[conversationId] ?? []);
+    },
+    [conversations, membersByConversation],
+  );
+
   const getGroupSettings = useCallback(
     (conversationId: string): GroupChatSettings => {
       const s = groupSettingsByConversation[conversationId];
@@ -399,9 +434,18 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const sendMessage = useCallback((conversationId: string, text: string) => {
+  const sendMessage = useCallback(
+    (conversationId: string, text: string, media?: MessageMediaAttachment) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed && !media) return;
+
+    const conv = conversations.find((c) => c.id === conversationId);
+    if (
+      conv?.type === 'group' &&
+      !groupHasFriendForMessages(membersByConversation[conversationId] ?? [])
+    ) {
+      return;
+    }
 
     const msg: Message = {
       id: makeId('msg'),
@@ -409,7 +453,10 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       text: trimmed,
       sentAt: Date.now(),
       isOwn: true,
+      ...(media ? { mediaUri: media.uri, mediaKind: media.kind } : {}),
     };
+
+    const preview = lastPreviewForOutgoing(trimmed, media);
 
     setMessagesByConversation((prev) => ({
       ...prev,
@@ -419,16 +466,24 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     setConversations((prev) =>
       prev.map((c) =>
         c.id === conversationId
-          ? { ...c, lastMessagePreview: trimmed, updatedAt: Date.now() }
+          ? { ...c, lastMessagePreview: preview, updatedAt: Date.now() }
           : c,
       ),
     );
-  }, []);
+  },
+    [conversations, membersByConversation],
+  );
 
   const demoSimulateIncomingMessage = useCallback(
     (conversationId: string) => {
-      const s = getGroupSettings(conversationId);
       const conv = getConversation(conversationId);
+      if (
+        conv?.type === 'group' &&
+        !groupHasFriendForMessages(membersByConversation[conversationId] ?? [])
+      ) {
+        return;
+      }
+      const s = getGroupSettings(conversationId);
       const text = '[Démo] Message entrant simulé';
       const authorName = 'Test';
       const msg: Message = {
@@ -459,7 +514,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
         senderLabel: authorName,
       });
     },
-    [getConversation, getGroupSettings],
+    [getConversation, getGroupSettings, membersByConversation],
   );
 
   const removeGroupMember = useCallback((conversationId: string, memberId: string) => {
@@ -491,6 +546,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
         displayName: name,
         isSelf: false,
         avatarGradient: [g[0], g[1]],
+        isFriendWithMe: false,
       };
       const next = [...list, member];
       nextLen = next.length;
@@ -554,6 +610,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
           displayName: invite.displayName,
           isSelf: false,
           avatarGradient: [invite.avatarGradient[0], invite.avatarGradient[1]],
+          isFriendWithMe: true,
         };
         const next = [...list, member];
         nextLen = next.length;
@@ -606,6 +663,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       messagesTabBadgeCount,
       visitesTabBadgeCount,
       getGroupMembers,
+      canViewGroupMessages,
       getGroupSettings,
       setGroupSettings,
       removeGroupMember,
@@ -628,6 +686,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       messagesTabBadgeCount,
       visitesTabBadgeCount,
       getGroupMembers,
+      canViewGroupMessages,
       getGroupSettings,
       setGroupSettings,
       removeGroupMember,
