@@ -10,6 +10,8 @@ export interface GroupMember {
 export interface GroupChatSettings {
   muteSounds: boolean;
   blockNotifications: boolean;
+  /** Par id membre : true = notifications discrètes / muet pour ce membre */
+  memberBellMuted?: Record<string, boolean>;
 }
 
 export interface Conversation {

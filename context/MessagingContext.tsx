@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-
+import { playIncomingMessageFeedback } from '@/lib/playIncomingMessageFeedback';
 import type {
   Conversation,
   GroupChatSettings,
@@ -284,6 +284,18 @@ type MessagingContextValue = {
   setGroupSettings: (conversationId: string, patch: Partial<GroupChatSettings>) => void;
   removeGroupMember: (conversationId: string, memberId: string) => void;
   addGroupMember: (conversationId: string) => void;
+  /** Ajoute un ami invité par nom (liste « inviter un ami »), sans doublon. */
+  addGroupMemberInvite: (
+    conversationId: string,
+    invite: { displayName: string; avatarGradient: readonly [string, string] },
+  ) => void;
+  /** Crée un groupe dont vous êtes le seul membre ; retourne l’id de conversation. */
+  createEmptyGroup: (title: string) => string;
+  /**
+   * Démo : ajoute un message entrant fictif et applique son / « notification »
+   * selon les réglages (vibration si sons autorisés, alerte + badge si notifs autorisées).
+   */
+  demoSimulateIncomingMessage: (conversationId: string) => void;
   leaveGroup: (conversationId: string) => void;
 };
 
@@ -315,32 +327,6 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const markConversationRead = useCallback((conversationId: string) => {
     setConversations((prev) =>
       prev.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c)),
-    );
-  }, []);
-
-  const sendMessage = useCallback((conversationId: string, text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-
-    const msg: Message = {
-      id: makeId('msg'),
-      conversationId,
-      text: trimmed,
-      sentAt: Date.now(),
-      isOwn: true,
-    };
-
-    setMessagesByConversation((prev) => ({
-      ...prev,
-      [conversationId]: [...(prev[conversationId] ?? []), msg],
-    }));
-
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === conversationId
-          ? { ...c, lastMessagePreview: trimmed, updatedAt: Date.now() }
-          : c,
-      ),
     );
   }, []);
 
@@ -384,20 +370,97 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const getGroupSettings = useCallback(
-    (conversationId: string): GroupChatSettings =>
-      groupSettingsByConversation[conversationId] ?? {
-        muteSounds: false,
-        blockNotifications: false,
-      },
+    (conversationId: string): GroupChatSettings => {
+      const s = groupSettingsByConversation[conversationId];
+      if (!s) {
+        return { muteSounds: false, blockNotifications: false, memberBellMuted: {} };
+      }
+      return {
+        muteSounds: s.muteSounds,
+        blockNotifications: s.blockNotifications,
+        memberBellMuted: s.memberBellMuted ?? {},
+      };
+    },
     [groupSettingsByConversation],
   );
 
   const setGroupSettings = useCallback((conversationId: string, patch: Partial<GroupChatSettings>) => {
     setGroupSettingsByConversation((prev) => {
-      const cur = prev[conversationId] ?? { muteSounds: false, blockNotifications: false };
-      return { ...prev, [conversationId]: { ...cur, ...patch } };
+      const cur = prev[conversationId] ?? {
+        muteSounds: false,
+        blockNotifications: false,
+        memberBellMuted: {} as Record<string, boolean>,
+      };
+      const base: GroupChatSettings = { ...cur, ...patch };
+      if (patch.memberBellMuted !== undefined) {
+        base.memberBellMuted = { ...(cur.memberBellMuted ?? {}), ...patch.memberBellMuted };
+      }
+      return { ...prev, [conversationId]: base };
     });
   }, []);
+
+  const sendMessage = useCallback((conversationId: string, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    const msg: Message = {
+      id: makeId('msg'),
+      conversationId,
+      text: trimmed,
+      sentAt: Date.now(),
+      isOwn: true,
+    };
+
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationId]: [...(prev[conversationId] ?? []), msg],
+    }));
+
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conversationId
+          ? { ...c, lastMessagePreview: trimmed, updatedAt: Date.now() }
+          : c,
+      ),
+    );
+  }, []);
+
+  const demoSimulateIncomingMessage = useCallback(
+    (conversationId: string) => {
+      const s = getGroupSettings(conversationId);
+      const conv = getConversation(conversationId);
+      const text = '[Démo] Message entrant simulé';
+      const authorName = 'Test';
+      const msg: Message = {
+        id: makeId('msg'),
+        conversationId,
+        text,
+        sentAt: Date.now(),
+        isOwn: false,
+        authorName,
+      };
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [conversationId]: [...(prev[conversationId] ?? []), msg],
+      }));
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== conversationId) return c;
+          return {
+            ...c,
+            lastMessagePreview: text,
+            updatedAt: Date.now(),
+            unreadCount: s.blockNotifications ? c.unreadCount : c.unreadCount + 1,
+          };
+        }),
+      );
+
+      void playIncomingMessageFeedback(text, s, conv?.title ?? 'Discussion', {
+        senderLabel: authorName,
+      });
+    },
+    [getConversation, getGroupSettings],
+  );
 
   const removeGroupMember = useCallback((conversationId: string, memberId: string) => {
     let nextLen = 0;
@@ -443,6 +506,71 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const createEmptyGroup = useCallback((title: string) => {
+    const trimmed = title.trim();
+    const id = makeId('grp');
+    setConversations((prev) => {
+      const g = GRADIENT_POOL[prev.length % GRADIENT_POOL.length];
+      const conv: Conversation = {
+        id,
+        title: trimmed,
+        type: 'group',
+        lastMessagePreview: 'Invitez des membres depuis les paramètres.',
+        updatedAt: Date.now(),
+        unreadCount: 0,
+        storyBadgeCount: 0,
+        avatarGradient: [g[0], g[1]],
+        memberCount: 1,
+      };
+      return [conv, ...prev];
+    });
+    setMembersByConversation((prev) => ({
+      ...prev,
+      [id]: [
+        {
+          id: `${id}-me`,
+          displayName: 'Moi',
+          isSelf: true,
+          avatarGradient: ['#78909C', '#546E7A'],
+        },
+      ],
+    }));
+    setMessagesByConversation((prev) => ({ ...prev, [id]: [] }));
+    return id;
+  }, []);
+
+  const addGroupMemberInvite = useCallback(
+    (
+      conversationId: string,
+      invite: { displayName: string; avatarGradient: readonly [string, string] },
+    ) => {
+      let nextLen = 0;
+      let changed = false;
+      setMembersByConversation((prev) => {
+        const list = prev[conversationId] ?? [];
+        if (list.some((m) => m.displayName === invite.displayName)) return prev;
+        const member: GroupMember = {
+          id: makeId('mem'),
+          displayName: invite.displayName,
+          isSelf: false,
+          avatarGradient: [invite.avatarGradient[0], invite.avatarGradient[1]],
+        };
+        const next = [...list, member];
+        nextLen = next.length;
+        changed = true;
+        return { ...prev, [conversationId]: next };
+      });
+      if (changed) {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === conversationId && c.type === 'group' ? { ...c, memberCount: nextLen } : c,
+          ),
+        );
+      }
+    },
+    [],
+  );
+
   const leaveGroup = useCallback((conversationId: string) => {
     setConversations((prev) => prev.filter((c) => c.id !== conversationId));
     setMessagesByConversation((prev) => {
@@ -482,6 +610,9 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       setGroupSettings,
       removeGroupMember,
       addGroupMember,
+      addGroupMemberInvite,
+      createEmptyGroup,
+      demoSimulateIncomingMessage,
       leaveGroup,
     }),
     [
@@ -501,6 +632,9 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       setGroupSettings,
       removeGroupMember,
       addGroupMember,
+      addGroupMemberInvite,
+      createEmptyGroup,
+      demoSimulateIncomingMessage,
       leaveGroup,
     ],
   );

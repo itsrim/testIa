@@ -117,11 +117,13 @@ function GroupStoryStripItem({
 
 function StoryNewStripItem({ onPress }: { onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={styles.storyCell} accessibilityRole="button" accessibilityLabel="Nouvelle discussion">
+    <Pressable onPress={onPress} style={styles.storyCell} accessibilityRole="button" accessibilityLabel="Nouveau groupe">
       <View style={styles.storyNewRing}>
         <Ionicons name="add" size={34} color="rgba(255,255,255,0.92)" />
       </View>
-      <Text style={styles.storyLabelNew}>Nouveau</Text>
+      <Text style={styles.storyLabelNew} numberOfLines={1}>
+        + Groupe
+      </Text>
     </Pressable>
   );
 }

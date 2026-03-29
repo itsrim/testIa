@@ -146,9 +146,13 @@ export default function ChatScreen() {
                   params: { conversationId: id },
                 })
               }
-              hitSlop={10}
-              style={styles.headerIconBtn}>
-              <Ionicons name="add-circle-outline" size={26} color={Design.textPrimary} />
+              hitSlop={8}
+              style={styles.headerSortieBtn}
+              accessibilityLabel="Créer une nouvelle sortie"
+              accessibilityRole="button"
+              accessibilityHint="Ouvre le formulaire pour proposer une sortie à cette discussion">
+              <Ionicons name="calendar-outline" size={18} color="#FF4B6E" />
+              <Text style={styles.headerSortieLabel}>+ Sortie</Text>
             </Pressable>
             <Pressable
               onPress={() => router.push(`/chat/${id}/parametres`)}
@@ -298,7 +302,26 @@ const styles = StyleSheet.create({
   headerRightRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    marginRight: 4,
+  },
+  headerSortieBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 12,
+    backgroundColor: '#1c1c1e',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#333',
+    maxWidth: 118,
+  },
+  headerSortieLabel: {
+    color: Design.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   headerIconBtn: {
     padding: 4,

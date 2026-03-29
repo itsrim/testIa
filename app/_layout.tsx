@@ -52,8 +52,8 @@ export default function RootLayout() {
             name="nouvelle-conversation"
             options={{
               presentation: 'modal',
-              title: 'Nouvelle discussion',
-              headerBackTitle: 'Annuler',
+              headerShown: false,
+              contentStyle: { backgroundColor: 'transparent' },
             }}
           />
         </Stack>
