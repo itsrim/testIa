@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { playIncomingMessageFeedback } from '@/lib/playIncomingMessageFeedback';
+import { verifyAndRepairData } from '@/lib/dataIntegrity';
 import { mockMessagingSeed } from '@/data/mockDataLoader';
 import {
   groupHasFriendForMessages,
@@ -111,6 +112,8 @@ type MessagingContextValue = {
    */
   demoSimulateIncomingMessage: (conversationId: string) => void;
   leaveGroup: (conversationId: string) => void;
+  /** Force un nettoyage d'intégrité (réservé admin) */
+  cleanData: () => void;
 };
 
 const MessagingContext = createContext<MessagingContextValue | null>(null);
@@ -145,6 +148,16 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       }
     })();
   }, []);
+
+  const cleanData = useCallback(() => {
+    const { repairedEvents, repairedMembersByConversation } = verifyAndRepairData(
+      events,
+      conversations,
+      membersByConversation
+    );
+    setEvents(repairedEvents);
+    setMembersByConversation(repairedMembersByConversation);
+  }, [events, conversations, membersByConversation]);
 
   const mounted = React.useRef(false);
   useEffect(() => {
@@ -249,9 +262,13 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     (conversationId: string) => {
       const conv = conversations.find((c) => c.id === conversationId);
       if (!conv || conv.type !== 'group') return true;
+
+      const isLinkedToEvent = events.some((e) => e.conversationId === conversationId);
+      if (isLinkedToEvent) return true;
+
       return groupHasFriendForMessages(membersByConversation[conversationId] ?? []);
     },
-    [conversations, membersByConversation],
+    [conversations, membersByConversation, events],
   );
 
   const getGroupSettings = useCallback(
@@ -525,6 +542,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       createEmptyGroup,
       demoSimulateIncomingMessage,
       leaveGroup,
+      cleanData,
     }),
     [
       conversations,
@@ -551,6 +569,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       createEmptyGroup,
       demoSimulateIncomingMessage,
       leaveGroup,
+      cleanData,
     ],
   );
 

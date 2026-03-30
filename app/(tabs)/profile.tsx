@@ -10,6 +10,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -60,7 +61,7 @@ export default function ProfileScreen() {
     setLangEn(i18n.language.startsWith('en'));
   }, [i18n.language]);
 
-  const { events } = useMessaging();
+  const { events, cleanData } = useMessaging();
   const {
     isPremium,
     togglePremium,
@@ -419,6 +420,19 @@ export default function ProfileScreen() {
               <Ionicons name="refresh" size={18} color="#EF4444" />
               <Text style={styles.resetTxt}>{t('profile.resetSettings')}</Text>
             </Pressable>
+
+            {isAdmin && (
+              <Pressable
+                onPress={() => {
+                  cleanData();
+                  Alert.alert('Succès', 'Les données ont été nettoyées et vérifiées avec succès !');
+                }}
+                style={[styles.resetBtn, { backgroundColor: 'rgba(79, 70, 229, 0.1)', borderColor: '#4F46E5', marginTop: 12 }]}>
+                <Ionicons name="color-wand" size={18} color="#4F46E5" />
+                <Text style={[styles.resetTxt, { color: '#4F46E5' }]}>Nettoyer les données (Admin)</Text>
+              </Pressable>
+            )}
+
             <Text style={styles.autoSave}>{t('profile.sessionNote')}</Text>
           </View>
         )}

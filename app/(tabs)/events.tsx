@@ -642,11 +642,11 @@ export default function EventsScreen() {
         accessibilityLabel="Créer un événement"
         style={({ pressed }) => [styles.fab, { bottom: Math.max(insets.bottom, 14) + 62 }, pressed && { opacity: 0.9 }]}>
         <LinearGradient
-          colors={[...CAL_GRADIENT]}
+          colors={['#FDE047', '#FBBF24']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.fabInner}>
-          <Ionicons name="add" size={30} color="#FFFFFF" />
+          <Ionicons name="add" size={30} color="#000000" />
         </LinearGradient>
       </Pressable>
     </View>
