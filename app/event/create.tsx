@@ -30,17 +30,6 @@ const ACCENT = '#9B5DE5';
 const BTN_GRADIENT = ['#5B2D8C', '#7B2D7A', '#C23B8E'] as const;
 const MUTED = 'rgba(142, 142, 147, 0.95)';
 
-function parseFrDate(s: string): Date | null {
-  const m = s.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!m) return null;
-  const day = parseInt(m[1], 10);
-  const month = parseInt(m[2], 10) - 1;
-  const year = parseInt(m[3], 10);
-  const d = new Date(year, month, day);
-  if (d.getFullYear() !== year || d.getMonth() !== month || d.getDate() !== day) return null;
-  return d;
-}
-
 function toIsoDateKey(d: Date): string {
   const y = d.getFullYear();
   const mo = String(d.getMonth() + 1).padStart(2, '0');
@@ -61,15 +50,6 @@ function frenchSectionLabel(d: Date): string {
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
-function CardRow({ icon, children, border = true }: { icon: keyof typeof Ionicons.glyphMap; children: React.ReactNode; border?: boolean }) {
-  return (
-    <View style={[styles.cardRow, border && styles.cardRowBorder]}>
-      <Ionicons name={icon} size={20} color={MUTED} style={styles.cardRowIcon} />
-      <View style={styles.cardRowContent}>{children}</View>
-    </View>
-  );
-}
-
 export default function CreateEventScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -82,8 +62,6 @@ export default function CreateEventScreen() {
     const ms = 1000 * 60 * 15;
     return new Date(Math.ceil(d.getTime() / ms) * ms);
   });
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
   const [location, setLocation] = useState('');
   const limits = getLimits();
   const [maxParticipants, setMaxParticipants] = useState(String(getLimits().maxParticipants));
@@ -100,6 +78,20 @@ export default function CreateEventScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [hideAddress, setHideAddress] = useState(false);
   const [manualApproval, setManualApproval] = useState(false);
+
+  const bumpMax = useCallback(
+    (delta: number) => {
+      void Haptics.selectionAsync();
+      setMaxParticipants((p) => {
+        const n = parseInt(p, 10);
+        const cur = Number.isFinite(n) ? n : limits.maxParticipants;
+        const cap = limits.maxParticipants;
+        const next = Math.min(cap, Math.max(2, cur + delta));
+        return String(next);
+      });
+    },
+    [limits.maxParticipants],
+  );
 
   const pickImage = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -134,8 +126,12 @@ export default function CreateEventScreen() {
       Alert.alert('Lieu', 'Indiquez un lieu ou un point de rendez-vous.');
       return;
     }
-    if (!Number.isFinite(maxN) || maxN < 2 || maxN > 20) {
-      Alert.alert('Participants', 'Le nombre de participants doit être entre 2 et 20.');
+    const maxCapVal = limits.maxParticipants;
+    if (!Number.isFinite(maxN) || maxN < 2 || maxN > maxCapVal) {
+      Alert.alert(
+        'Participants',
+        `Le nombre de participants doit être entre 2 et ${maxCapVal}.`,
+      );
       return;
     }
 
@@ -155,8 +151,7 @@ export default function CreateEventScreen() {
       return;
     }
 
-    const maxCap = limits.maxParticipants;
-    const cappedMax = Math.min(maxN, maxCap);
+    const cappedMax = Math.min(maxN, maxCapVal);
 
     const dateKey = toIsoDateKey(parsed);
     const discussionTitle = `Sortie : ${t}`;
@@ -248,144 +243,122 @@ export default function CreateEventScreen() {
             />
           </View>
 
-          <View style={[styles.card, { flexDirection: 'row' }]}>
-            <View style={{ flex: 1, borderRightWidth: 1, borderRightColor: BORDER }}>
-              <Pressable onPress={() => { void Haptics.selectionAsync(); setShowDatePicker(true); }} style={{ flex: 1 }}>
-                <CardRow icon="calendar-outline" border={false}>
-                  {Platform.OS === 'web' ? (
-                    <TextInput
-                      // @ts-ignore
-                      type="date"
-                      value={eventDate.toISOString().split('T')[0]}
-                      onChange={(e: any) => {
-                        const v = e.nativeEvent.text;
-                        if (v) {
-                          const d = new Date(v);
-                          if (!isNaN(d.getTime())) {
-                            setEventDate((prev) => {
-                              const nd = new Date(prev);
-                              nd.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
-                              return nd;
-                            });
-                          }
-                        }
-                      }}
-                      style={[styles.cardInput, { paddingTop: 18, colorScheme: 'dark' } as any]}
-                    />
-                  ) : Platform.OS === 'ios' ? (
-                    <DateTimePicker
-                      value={eventDate}
-                      mode="date"
-                      display="default"
-                      themeVariant="dark"
-                      onChange={(e, d) => {
-                        setShowDatePicker(false);
-                        if (d) setEventDate(d);
-                      }}
-                      style={{ flex: 1, height: 40, alignSelf: 'flex-start' }}
-                    />
-                  ) : (
-                    <Text style={[styles.cardInput, { paddingTop: 18 }]}>
-                      {eventDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                    </Text>
-                  )}
-                </CardRow>
-              </Pressable>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Pressable onPress={() => { void Haptics.selectionAsync(); setShowTimePicker(true); }} style={{ flex: 1 }}>
-                <CardRow icon="time-outline" border={false}>
-                  {Platform.OS === 'web' ? (
-                    <TextInput
-                      // @ts-ignore
-                      type="time"
-                      value={eventDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                      onChange={(e: any) => {
-                        const v = e.nativeEvent.text;
-                        if (v && v.includes(':')) {
-                          const [h, m] = v.split(':');
+          <View style={styles.card}>
+            <Text style={styles.blockLabel}>Date et heure</Text>
+            {Platform.OS === 'web' ? (
+              <View style={styles.webDateRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.webDateHint}>Date</Text>
+                  <TextInput
+                    // @ts-ignore — type date (web)
+                    type="date"
+                    value={eventDate.toISOString().split('T')[0]}
+                    onChange={(e: { nativeEvent: { text: string } }) => {
+                      const v = e.nativeEvent.text;
+                      if (v) {
+                        const d = new Date(v);
+                        if (!Number.isNaN(d.getTime())) {
                           setEventDate((prev) => {
                             const nd = new Date(prev);
-                            nd.setHours(parseInt(h, 10), parseInt(m, 10));
+                            nd.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
                             return nd;
                           });
                         }
-                      }}
-                      style={[styles.cardInput, { paddingTop: 18, colorScheme: 'dark' } as any]}
-                    />
-                  ) : Platform.OS === 'ios' ? (
-                    <DateTimePicker
-                      value={eventDate}
-                      mode="time"
-                      display="default"
-                      themeVariant="dark"
-                      minuteInterval={15}
-                      onChange={(e, d) => {
-                        setShowTimePicker(false);
-                        if (d) setEventDate(d);
-                      }}
-                      style={{ flex: 1, height: 40, alignSelf: 'flex-start' }}
-                    />
-                  ) : (
-                    <Text style={[styles.cardInput, { paddingTop: 18 }]}>
-                      {eventDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  )}
-                </CardRow>
-              </Pressable>
-            </View>
+                      }
+                    }}
+                    style={[styles.webDateInput, { colorScheme: 'dark' } as object]}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.webDateHint}>Heure</Text>
+                  <TextInput
+                    // @ts-ignore — type time (web)
+                    type="time"
+                    value={eventDate.toLocaleTimeString('en-GB', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false,
+                    })}
+                    onChange={(e: { nativeEvent: { text: string } }) => {
+                      const v = e.nativeEvent.text;
+                      if (v?.includes(':')) {
+                        const [h, m] = v.split(':');
+                        setEventDate((prev) => {
+                          const nd = new Date(prev);
+                          nd.setHours(parseInt(h, 10), parseInt(m, 10));
+                          return nd;
+                        });
+                      }
+                    }}
+                    style={[styles.webDateInput, { colorScheme: 'dark' } as object]}
+                  />
+                </View>
+              </View>
+            ) : (
+              <View style={styles.wheelWrap}>
+                <DateTimePicker
+                  value={eventDate}
+                  mode="datetime"
+                  display="spinner"
+                  themeVariant="dark"
+                  minuteInterval={15}
+                  onChange={(_, d) => {
+                    if (d) setEventDate(d);
+                  }}
+                  locale="fr-FR"
+                  style={styles.wheelPicker}
+                />
+              </View>
+            )}
           </View>
 
-          {Platform.OS === 'android' && showDatePicker && (
-            <DateTimePicker
-              value={eventDate}
-              mode="date"
-              display="default"
-              onChange={(e, d) => {
-                setShowDatePicker(false);
-                if (d) setEventDate(d);
-              }}
-            />
-          )}
-
-          {Platform.OS === 'android' && showTimePicker && (
-            <DateTimePicker
-              value={eventDate}
-              mode="time"
-              display="default"
-              minuteInterval={15}
-              onChange={(e, d) => {
-                setShowTimePicker(false);
-                if (d) setEventDate(d);
-              }}
-            />
-          )}
-
-          <View style={styles.card}>
-            <CardRow icon="location-outline" border>
+          <View style={styles.lieuMaxRow}>
+            <View style={styles.lieuCol}>
+              <View style={styles.inlineLabelRow}>
+                <Ionicons name="location-outline" size={18} color={Design.textPrimary} />
+                <Text style={styles.inlineLabel}>Lieu</Text>
+              </View>
               <TextInput
                 value={location}
                 onChangeText={setLocation}
-                placeholder="Lieu de la sortie"
+                placeholder="Ex: Parc Monceau"
                 placeholderTextColor={MUTED}
-                style={styles.cardInput}
+                style={styles.lieuField}
               />
-            </CardRow>
-            <CardRow icon="people-outline" border={false}>
-              <View style={styles.participantsRow}>
-                <Text style={styles.participantsLabel}>Participants max</Text>
-                <TextInput
-                  value={maxParticipants}
-                  onChangeText={setMaxParticipants}
-                  placeholder="20"
-                  placeholderTextColor={MUTED}
-                  keyboardType="number-pad"
-                  style={styles.participantsInput}
-                  textAlign="right"
-                  maxLength={2}
-                />
+            </View>
+            <View style={styles.maxCol}>
+              <View style={styles.inlineLabelRow}>
+                <Ionicons name="people-outline" size={18} color={Design.textPrimary} />
+                <Text style={styles.inlineLabel}>Max</Text>
               </View>
-            </CardRow>
+              <View style={styles.maxField}>
+                <Text style={styles.maxFieldValue}>{maxParticipants}</Text>
+                <View style={styles.stepper}>
+                  <Pressable
+                    onPress={() => bumpMax(1)}
+                    hitSlop={6}
+                    style={({ pressed }) => [styles.stepperBtn, pressed && { opacity: 0.6 }]}
+                    disabled={
+                      (Number.isFinite(parseInt(maxParticipants, 10))
+                        ? parseInt(maxParticipants, 10)
+                        : limits.maxParticipants) >= limits.maxParticipants
+                    }>
+                    <Ionicons name="chevron-up" size={18} color={Design.textPrimary} />
+                  </Pressable>
+                  <Pressable
+                    onPress={() => bumpMax(-1)}
+                    hitSlop={6}
+                    style={({ pressed }) => [styles.stepperBtn, pressed && { opacity: 0.6 }]}
+                    disabled={
+                      (Number.isFinite(parseInt(maxParticipants, 10))
+                        ? parseInt(maxParticipants, 10)
+                        : 2) <= 2
+                    }>
+                    <Ionicons name="chevron-down" size={18} color={Design.textPrimary} />
+                  </Pressable>
+                </View>
+              </View>
+            </View>
           </View>
 
           <View style={styles.cardSection}>
@@ -559,6 +532,108 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 16,
   },
+  blockLabel: {
+    color: Design.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 4,
+  },
+  webDateRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  webDateHint: {
+    color: MUTED,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  webDateInput: {
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: Design.textPrimary,
+    fontSize: 15,
+  },
+  wheelWrap: {
+    alignItems: 'stretch',
+    paddingBottom: 8,
+    overflow: 'hidden',
+  },
+  wheelPicker: {
+    width: '100%',
+    height: Platform.OS === 'ios' ? 220 : 200,
+    alignSelf: 'center',
+  },
+  lieuMaxRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+    alignItems: 'flex-end',
+  },
+  lieuCol: {
+    flex: 7,
+    minWidth: 0,
+  },
+  maxCol: {
+    flex: 3,
+    minWidth: 96,
+  },
+  inlineLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  inlineLabel: {
+    color: Design.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  lieuField: {
+    backgroundColor: CARD,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: Design.textPrimary,
+  },
+  maxField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: CARD,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    paddingLeft: 14,
+    minHeight: 52,
+  },
+  maxFieldValue: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Design.textPrimary,
+  },
+  stepper: {
+    borderLeftWidth: 1,
+    borderLeftColor: BORDER,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+  },
+  stepperBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   card: {
     backgroundColor: CARD,
     borderRadius: 20,
@@ -567,47 +642,9 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     overflow: 'hidden',
   },
-  cardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 16,
-    minHeight: 56,
-  },
   cardRowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: BORDER,
-  },
-  cardRowIcon: {
-    width: 24,
-    textAlign: 'center',
-    marginRight: 12,
-  },
-  cardRowContent: {
-    flex: 1,
-  },
-  cardInput: {
-    flex: 1,
-    height: '100%',
-    fontSize: 16,
-    color: Design.textPrimary,
-    paddingRight: 16,
-  },
-  participantsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingRight: 16,
-  },
-  participantsLabel: {
-    color: Design.textPrimary,
-    fontSize: 16,
-  },
-  participantsInput: {
-    fontSize: 16,
-    color: Design.textSecondary,
-    fontWeight: '700',
-    minWidth: 40,
-    paddingVertical: 12,
   },
   cardSection: {
     marginBottom: 24,

@@ -5,6 +5,28 @@
     "events": "Agenda",
     "profile": "Profil"
   },
+  "home": {
+    "kicker": "Bienvenue",
+    "title": "Comment va ta journée ?",
+    "subtitle": "Prends un instant pour toi : trois petites questions pour t’aider à poser un cadre agréable à ta journée.",
+    "q1": "Comment te sens-tu en ce moment ?",
+    "q2": "Qu’est-ce qui compte le plus pour toi aujourd’hui ?",
+    "q3": "Une intention simple pour ta journée ?",
+    "placeholder": "Écris quelques mots…",
+    "continue": "Voir les sorties à thème",
+    "skip": "Passer",
+    "openProfile": "Profil",
+    "openSearch": "Recherche",
+    "explorerTitle": "Explorer",
+    "explorerClose": "Fermer",
+    "themeYoga": "Yoga",
+    "themeMeditation": "Méditation",
+    "themeBreath": "Respiration",
+    "themePosture": "Corrigez votre posture",
+    "themeGrowth": "Développement personnel",
+    "themeFitness": "Fitness",
+    "themeSleep": "Aide au sommeil"
+  },
   "profile": {
     "memberSince": "Membre depuis {{year}}",
     "statsReliability": "Fiabilité",

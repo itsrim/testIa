@@ -5,6 +5,28 @@
     "events": "Events",
     "profile": "Profile"
   },
+  "home": {
+    "kicker": "Welcome",
+    "title": "How’s your day?",
+    "subtitle": "Take a moment: three short prompts to help you set a positive tone for the day.",
+    "q1": "How are you feeling right now?",
+    "q2": "What matters most to you today?",
+    "q3": "One simple intention for your day?",
+    "placeholder": "Write a few words…",
+    "continue": "Browse themed outings",
+    "skip": "Skip",
+    "openProfile": "Profile",
+    "openSearch": "Search",
+    "explorerTitle": "Explore",
+    "explorerClose": "Close",
+    "themeYoga": "Yoga",
+    "themeMeditation": "Meditation",
+    "themeBreath": "Breathwork",
+    "themePosture": "Fix your posture",
+    "themeGrowth": "Personal growth",
+    "themeFitness": "Fitness",
+    "themeSleep": "Sleep help"
+  },
   "profile": {
     "memberSince": "Member since {{year}}",
     "statsReliability": "Reliability",
