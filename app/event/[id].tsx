@@ -61,7 +61,7 @@ export default function EventDetailScreen() {
   const eventId = Array.isArray(raw.id) ? raw.id[0] : raw.id;
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { getEventById, joinEvent } = useMessaging();
+  const { getEventById, joinEvent, toggleEventFavorite } = useMessaging();
 
   const event = eventId ? getEventById(eventId) : undefined;
   const rich = useMemo(() => (event ? getEventDetailRich(event) : null), [event]);
@@ -136,6 +136,26 @@ export default function EventDetailScreen() {
               <Ionicons name="chevron-back" size={26} color="#fff" />
             </View>
           </Pressable>
+          <View style={[styles.headerActions, { top: insets.top + 8 }]}>
+            <Pressable
+              onPress={() => Alert.alert('Partager', 'Lien partagé !')}
+              style={styles.backBtnInner}
+              hitSlop={12}
+            >
+              <Ionicons name="share-social-outline" size={22} color="#fff" />
+            </Pressable>
+            <Pressable
+              onPress={() => toggleEventFavorite(event.id)}
+              style={styles.backBtnInner}
+              hitSlop={12}
+            >
+              <Ionicons 
+                name={event.isFavorite ? "heart" : "heart-outline"} 
+                size={22} 
+                color={event.isFavorite ? "#FF4081" : "#fff"} 
+              />
+            </Pressable>
+          </View>
         </View>
 
         <View style={[styles.sheet, { marginTop: -CARD_RADIUS }]}>
@@ -327,6 +347,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     zIndex: 4,
+  },
+  headerActions: {
+    position: 'absolute',
+    right: 12,
+    zIndex: 4,
+    flexDirection: 'row',
+    gap: 12,
   },
   backBtnInner: {
     width: 40,

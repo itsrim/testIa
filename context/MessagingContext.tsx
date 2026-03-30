@@ -2,9 +2,11 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { playIncomingMessageFeedback } from '@/lib/playIncomingMessageFeedback';
 import { mockMessagingSeed } from '@/data/mockDataLoader';
 import {
@@ -85,6 +87,8 @@ type MessagingContextValue = {
   toggleEventFavorite: (eventId: string) => void;
   /** Passe un événement en statut inscrit (démo). */
   joinEvent: (eventId: string) => void;
+  /** Annule la participation d'un événement (démo). */
+  leaveEvent: (eventId: string) => void;
   messagesTabBadgeCount: number;
   visitesTabBadgeCount: number;
   getGroupMembers: (conversationId: string) => GroupMember[];
@@ -125,6 +129,33 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const [groupSettingsByConversation, setGroupSettingsByConversation] = useState<
     Record<string, GroupChatSettings>
   >({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const storedEvents = await AsyncStorage.getItem('events_data');
+        if (storedEvents) {
+          const parsed = JSON.parse(storedEvents) as Event[];
+          if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+            setEvents(parsed);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load events from storage', err);
+      }
+    })();
+  }, []);
+
+  const mounted = React.useRef(false);
+  useEffect(() => {
+    if (mounted.current) {
+      AsyncStorage.setItem('events_data', JSON.stringify(events)).catch((err) =>
+        console.warn('Failed to save events to storage', err)
+      );
+    } else {
+      mounted.current = true;
+    }
+  }, [events]);
 
   const messagesTabBadgeCount = useMemo(() => sumUnread(conversations), [conversations]);
   const visitesTabBadgeCount = mockMessagingSeed.visitesTabBadgeCount;
@@ -186,6 +217,19 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
           ...s,
           cardStatus: 'inscrit',
           participantCount: s.participantCount + 1,
+        };
+      }),
+    );
+  }, []);
+
+  const leaveEvent = useCallback((eventId: string) => {
+    setEvents((prev) =>
+      prev.map((s) => {
+        if (s.id !== eventId || s.cardStatus !== 'inscrit') return s;
+        return {
+          ...s,
+          cardStatus: 'join',
+          participantCount: Math.max(0, s.participantCount - 1),
         };
       }),
     );
@@ -468,6 +512,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       getEventById,
       toggleEventFavorite,
       joinEvent,
+      leaveEvent,
       messagesTabBadgeCount,
       visitesTabBadgeCount,
       getGroupMembers,
@@ -493,6 +538,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       getEventById,
       toggleEventFavorite,
       joinEvent,
+      leaveEvent,
       messagesTabBadgeCount,
       visitesTabBadgeCount,
       getGroupMembers,

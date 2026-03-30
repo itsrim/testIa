@@ -22,9 +22,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
-const INPUT_BG = '#1C1C1E';
-const INPUT_BORDER = 'rgba(255,255,255,0.08)';
+const CARD = '#1C1C1E';
+const BORDER = 'rgba(255,255,255,0.08)';
 const ACCENT = '#9B5DE5';
 const BTN_GRADIENT = ['#5B2D8C', '#7B2D7A', '#C23B8E'] as const;
 const MUTED = 'rgba(142, 142, 147, 0.95)';
@@ -60,17 +61,11 @@ function frenchSectionLabel(d: Date): string {
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
-function FieldLabel({
-  icon,
-  children,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  children: string;
-}) {
+function CardRow({ icon, children, border = true }: { icon: keyof typeof Ionicons.glyphMap; children: React.ReactNode; border?: boolean }) {
   return (
-    <View style={styles.fieldLabelRow}>
-      <Ionicons name={icon} size={15} color={MUTED} />
-      <Text style={styles.fieldLabel}>{children}</Text>
+    <View style={[styles.cardRow, border && styles.cardRowBorder]}>
+      <Ionicons name={icon} size={20} color={MUTED} style={styles.cardRowIcon} />
+      <View style={styles.cardRowContent}>{children}</View>
     </View>
   );
 }
@@ -78,12 +73,17 @@ function FieldLabel({
 export default function CreateEventScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { conversations, addEvent, events } = useMessaging();
+  const { addEvent, events, createEmptyGroup } = useMessaging();
   const { getLimits, isPremium, isRestricted } = useProfileSettings();
 
   const [title, setTitle] = useState('');
-  const [dateFr, setDateFr] = useState('29/03/2026');
-  const [timeShort, setTimeShort] = useState('19:00');
+  const [eventDate, setEventDate] = useState(() => {
+    const d = new Date();
+    const ms = 1000 * 60 * 15;
+    return new Date(Math.ceil(d.getTime() / ms) * ms);
+  });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [location, setLocation] = useState('');
   const limits = getLimits();
   const [maxParticipants, setMaxParticipants] = useState(String(getLimits().maxParticipants));
@@ -100,9 +100,6 @@ export default function CreateEventScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [hideAddress, setHideAddress] = useState(false);
   const [manualApproval, setManualApproval] = useState(false);
-  const [conversationId, setConversationId] = useState(conversations[0]?.id ?? '');
-
-  const convOptions = useMemo(() => conversations.slice(0, 12), [conversations]);
 
   const pickImage = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -125,27 +122,20 @@ export default function CreateEventScreen() {
   const submit = () => {
     const t = title.trim();
     const l = location.trim();
-    const parsed = parseFrDate(dateFr);
+    const parsed = eventDate;
+    const timeShortStr = eventDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const maxN = parseInt(maxParticipants.trim(), 10);
 
-    if (!conversationId) {
-      Alert.alert('Discussion', 'Aucune conversation disponible pour lier l’événement.');
-      return;
-    }
     if (!t) {
       Alert.alert('Titre', 'Indiquez un titre pour votre événement.');
-      return;
-    }
-    if (!parsed) {
-      Alert.alert('Date', 'Utilisez le format JJ/MM/AAAA (ex. 29/03/2026).');
       return;
     }
     if (!l) {
       Alert.alert('Lieu', 'Indiquez un lieu ou un point de rendez-vous.');
       return;
     }
-    if (!Number.isFinite(maxN) || maxN < 1) {
-      Alert.alert('Participants', 'Indiquez un nombre maximum valide (ex. 20).');
+    if (!Number.isFinite(maxN) || maxN < 2 || maxN > 20) {
+      Alert.alert('Participants', 'Le nombre de participants doit être entre 2 et 20.');
       return;
     }
 
@@ -169,14 +159,17 @@ export default function CreateEventScreen() {
     const cappedMax = Math.min(maxN, maxCap);
 
     const dateKey = toIsoDateKey(parsed);
+    const discussionTitle = `Sortie : ${t}`;
+    const newConvId = createEmptyGroup(discussionTitle);
+
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     addEvent({
-      conversationId,
+      conversationId: newConvId,
       title: t,
       dateLabel: frenchShortDate(parsed),
       location: l,
       notes: description.trim() || undefined,
-      timeShort: timeShort.trim() || '19:00',
+      timeShort: timeShortStr || '19:00',
       priceLabel: 'Gratuit',
       imageUri: imageUri ?? undefined,
       participantMax: cappedMax,
@@ -206,8 +199,13 @@ export default function CreateEventScreen() {
             style={({ pressed }) => [styles.headerBtn, pressed && { opacity: 0.7 }]}>
             <Ionicons name="close" size={26} color={Design.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Créer un événement</Text>
-          <View style={styles.headerBtn} />
+          <Text style={styles.headerTitle}>Nouvelle Sortie</Text>
+          <Pressable
+            onPress={submit}
+            hitSlop={12}
+            style={({ pressed }) => [styles.headerBtn, pressed && { opacity: 0.7 }]}>
+            <Text style={styles.headerCreateText}>Créer</Text>
+          </Pressable>
         </View>
 
         <ScrollView
@@ -215,178 +213,249 @@ export default function CreateEventScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: insets.bottom + 28 },
+            { paddingBottom: insets.bottom + 48 },
           ]}>
           <Pressable
             onPress={pickImage}
             style={({ pressed }) => [styles.photoZone, pressed && { opacity: 0.92 }]}>
             {imageUri ? (
-              <Image source={{ uri: imageUri }} style={styles.photoPreview} contentFit="cover" />
-            ) : (
               <>
-                <LinearGradient colors={['#5B2D8C', '#e1da1dff']} style={styles.photoIconBg}>
-                  <Ionicons name="image-outline" size={28} color="#fff" />
-                </LinearGradient>
-                <Text style={styles.photoHint}>Ajouter une photo</Text>
-                <Text style={styles.photoSub}>Appuyez pour choisir dans la galerie</Text>
+                <Image source={{ uri: imageUri }} style={styles.photoPreview} contentFit="cover" />
+                <View style={styles.photoEditBadge}>
+                  <Ionicons name="pencil" size={14} color="#fff" />
+                  <Text style={styles.photoEditText}>Modifier</Text>
+                </View>
               </>
+            ) : (
+              <LinearGradient colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)']} style={styles.photoPlaceholder}>
+                <View style={styles.photoIconCircle}>
+                  <Ionicons name="camera" size={32} color="#fff" />
+                </View>
+                <Text style={styles.photoHint}>Ajouter une photo de couverture</Text>
+              </LinearGradient>
             )}
           </Pressable>
 
-          <FieldLabel icon="document-text-outline">Titre de l&apos;événement</FieldLabel>
-          <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Ex : Soirée pizza entre amis"
-            placeholderTextColor={MUTED}
-            style={styles.input}
-          />
+          <View style={styles.card}>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Titre de l'événement"
+              placeholderTextColor={MUTED}
+              style={styles.titleCardInput}
+              multiline
+              maxLength={60}
+            />
+          </View>
 
-          <View style={styles.row2}>
-            <View style={styles.row2Col}>
-              <FieldLabel icon="calendar-outline">Date</FieldLabel>
-              <View style={styles.inputIconWrap}>
-                <TextInput
-                  value={dateFr}
-                  onChangeText={setDateFr}
-                  placeholder="JJ/MM/AAAA"
-                  placeholderTextColor={MUTED}
-                  keyboardType="numbers-and-punctuation"
-                  style={[styles.input, styles.inputInRow]}
-                />
-                <Ionicons name="calendar-outline" size={18} color={MUTED} style={styles.inputTrailing} />
-              </View>
+          <View style={[styles.card, { flexDirection: 'row' }]}>
+            <View style={{ flex: 1, borderRightWidth: 1, borderRightColor: BORDER }}>
+              <Pressable onPress={() => { void Haptics.selectionAsync(); setShowDatePicker(true); }} style={{ flex: 1 }}>
+                <CardRow icon="calendar-outline" border={false}>
+                  {Platform.OS === 'web' ? (
+                    <TextInput
+                      // @ts-ignore
+                      type="date"
+                      value={eventDate.toISOString().split('T')[0]}
+                      onChange={(e: any) => {
+                        const v = e.nativeEvent.text;
+                        if (v) {
+                          const d = new Date(v);
+                          if (!isNaN(d.getTime())) {
+                            setEventDate((prev) => {
+                              const nd = new Date(prev);
+                              nd.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
+                              return nd;
+                            });
+                          }
+                        }
+                      }}
+                      style={[styles.cardInput, { paddingTop: 18, colorScheme: 'dark' } as any]}
+                    />
+                  ) : Platform.OS === 'ios' ? (
+                    <DateTimePicker
+                      value={eventDate}
+                      mode="date"
+                      display="default"
+                      themeVariant="dark"
+                      onChange={(e, d) => {
+                        setShowDatePicker(false);
+                        if (d) setEventDate(d);
+                      }}
+                      style={{ flex: 1, height: 40, alignSelf: 'flex-start' }}
+                    />
+                  ) : (
+                    <Text style={[styles.cardInput, { paddingTop: 18 }]}>
+                      {eventDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    </Text>
+                  )}
+                </CardRow>
+              </Pressable>
             </View>
-            <View style={styles.row2Col}>
-              <FieldLabel icon="time-outline">Heure</FieldLabel>
-              <View style={styles.inputIconWrap}>
-                <TextInput
-                  value={timeShort}
-                  onChangeText={setTimeShort}
-                  placeholder="19:00"
-                  placeholderTextColor={MUTED}
-                  style={[styles.input, styles.inputInRow]}
-                />
-                <Ionicons name="time-outline" size={18} color={MUTED} style={styles.inputTrailing} />
-              </View>
+            <View style={{ flex: 1 }}>
+              <Pressable onPress={() => { void Haptics.selectionAsync(); setShowTimePicker(true); }} style={{ flex: 1 }}>
+                <CardRow icon="time-outline" border={false}>
+                  {Platform.OS === 'web' ? (
+                    <TextInput
+                      // @ts-ignore
+                      type="time"
+                      value={eventDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      onChange={(e: any) => {
+                        const v = e.nativeEvent.text;
+                        if (v && v.includes(':')) {
+                          const [h, m] = v.split(':');
+                          setEventDate((prev) => {
+                            const nd = new Date(prev);
+                            nd.setHours(parseInt(h, 10), parseInt(m, 10));
+                            return nd;
+                          });
+                        }
+                      }}
+                      style={[styles.cardInput, { paddingTop: 18, colorScheme: 'dark' } as any]}
+                    />
+                  ) : Platform.OS === 'ios' ? (
+                    <DateTimePicker
+                      value={eventDate}
+                      mode="time"
+                      display="default"
+                      themeVariant="dark"
+                      minuteInterval={15}
+                      onChange={(e, d) => {
+                        setShowTimePicker(false);
+                        if (d) setEventDate(d);
+                      }}
+                      style={{ flex: 1, height: 40, alignSelf: 'flex-start' }}
+                    />
+                  ) : (
+                    <Text style={[styles.cardInput, { paddingTop: 18 }]}>
+                      {eventDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  )}
+                </CardRow>
+              </Pressable>
             </View>
           </View>
 
-          <View style={styles.rowLoc}>
-            <View style={styles.rowLocMain}>
-              <FieldLabel icon="location-outline">Lieu</FieldLabel>
+          {Platform.OS === 'android' && showDatePicker && (
+            <DateTimePicker
+              value={eventDate}
+              mode="date"
+              display="default"
+              onChange={(e, d) => {
+                setShowDatePicker(false);
+                if (d) setEventDate(d);
+              }}
+            />
+          )}
+
+          {Platform.OS === 'android' && showTimePicker && (
+            <DateTimePicker
+              value={eventDate}
+              mode="time"
+              display="default"
+              minuteInterval={15}
+              onChange={(e, d) => {
+                setShowTimePicker(false);
+                if (d) setEventDate(d);
+              }}
+            />
+          )}
+
+          <View style={styles.card}>
+            <CardRow icon="location-outline" border>
               <TextInput
                 value={location}
                 onChangeText={setLocation}
-                placeholder="Ex : Parc Monceau"
+                placeholder="Lieu de la sortie"
                 placeholderTextColor={MUTED}
-                style={styles.input}
+                style={styles.cardInput}
               />
-            </View>
-            <View style={styles.rowLocMax}>
-              <FieldLabel icon="people-outline">Max</FieldLabel>
+            </CardRow>
+            <CardRow icon="people-outline" border={false}>
+              <View style={styles.participantsRow}>
+                <Text style={styles.participantsLabel}>Participants max</Text>
+                <TextInput
+                  value={maxParticipants}
+                  onChangeText={setMaxParticipants}
+                  placeholder="20"
+                  placeholderTextColor={MUTED}
+                  keyboardType="number-pad"
+                  style={styles.participantsInput}
+                  textAlign="right"
+                  maxLength={2}
+                />
+              </View>
+            </CardRow>
+          </View>
+
+          <View style={styles.cardSection}>
+            <Text style={styles.sectionTitle}>À PROPOS</Text>
+            <View style={[styles.card, { paddingVertical: 12 }]}>
               <TextInput
-                value={maxParticipants}
-                onChangeText={setMaxParticipants}
-                placeholder="20"
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Ajoutez des détails, le déroulé, le matériel à prévoir..."
                 placeholderTextColor={MUTED}
-                keyboardType="number-pad"
-                style={styles.input}
+                multiline
+                textAlignVertical="top"
+                style={styles.textarea}
               />
             </View>
           </View>
 
-          {convOptions.length > 0 ? (
-            <>
-              <Text style={styles.sectionKicker}>LIÉ À</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.chipsRow}>
-                {convOptions.map((c) => {
-                  const sel = c.id === conversationId;
-                  return (
-                    <Pressable
-                      key={c.id}
-                      onPress={() => {
-                        void Haptics.selectionAsync();
-                        setConversationId(c.id);
-                      }}
-                      style={({ pressed }) => [
-                        styles.chip,
-                        sel && styles.chipSelected,
-                        pressed && { opacity: 0.88 },
-                      ]}>
-                      <Text style={[styles.chipText, sel && styles.chipTextSelected]} numberOfLines={1}>
-                        {c.title}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </>
-          ) : null}
-
-          <Text style={styles.descLabel}>Description</Text>
-          <TextInput
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Décrivez votre événement…"
-            placeholderTextColor={MUTED}
-            multiline
-            textAlignVertical="top"
-            style={[styles.input, styles.textarea]}
-          />
-
-          <Text style={styles.sectionKicker}>OPTIONS</Text>
-
-          <View style={styles.optionCard}>
-            <View style={styles.optionIcon}>
-              <Ionicons name="eye-off-outline" size={20} color={ACCENT} />
+          <View style={styles.cardSection}>
+            <Text style={styles.sectionTitle}>OPTIONS</Text>
+            <View style={styles.card}>
+              <View style={[styles.optionRow, styles.cardRowBorder]}>
+                <View style={styles.optionBg}><Ionicons name="eye-off" size={18} color="#fff" /></View>
+                <View style={styles.optionTextWrap}>
+                  <Text style={styles.optionLabel}>Masquer l'adresse</Text>
+                  <Text style={styles.optionSubLabel}>Visible uniquement par les inscrits</Text>
+                </View>
+                <Switch
+                  value={hideAddress}
+                  onValueChange={setHideAddress}
+                  trackColor={{ false: '#3a3a3c', true: ACCENT }}
+                  thumbColor="#fff"
+                />
+              </View>
+              <View style={styles.optionRow}>
+                <View style={[styles.optionBg, { backgroundColor: '#F59E0B' }]}><Ionicons name="shield-checkmark" size={18} color="#fff" /></View>
+                <View style={styles.optionTextWrap}>
+                  <Text style={styles.optionLabel}>Validation manuelle</Text>
+                  <Text style={styles.optionSubLabel}>Valider chaque inscription</Text>
+                </View>
+                <Switch
+                  value={manualApproval}
+                  onValueChange={setManualApproval}
+                  trackColor={{ false: '#3a3a3c', true: '#F59E0B' }}
+                  thumbColor="#fff"
+                />
+              </View>
             </View>
-            <View style={styles.optionTextBlock}>
-              <Text style={styles.optionTitle}>Masquer l&apos;adresse</Text>
-              <Text style={styles.optionSub}>
-                {hideAddress ? 'Ville ou zone affichée seulement' : 'Adresse visible par tous'}
-              </Text>
-            </View>
-            <Switch
-              value={hideAddress}
-              onValueChange={setHideAddress}
-              trackColor={{ false: '#3a3a3c', true: 'rgba(155, 93, 229, 0.45)' }}
-              thumbColor={hideAddress ? ACCENT : '#888'}
-            />
           </View>
 
-          <View style={styles.optionCard}>
-            <View style={styles.optionIcon}>
-              <Ionicons name="shield-checkmark-outline" size={20} color={ACCENT} />
-            </View>
-            <View style={styles.optionTextBlock}>
-              <Text style={styles.optionTitle}>Validation manuelle</Text>
-              <Text style={styles.optionSub}>
-                {manualApproval ? 'Vous validez chaque inscription' : 'Inscriptions automatiques'}
-              </Text>
-            </View>
-            <Switch
-              value={manualApproval}
-              onValueChange={setManualApproval}
-              trackColor={{ false: '#a024d9ff', true: 'rgba(222, 241, 14, 0.45)' }}
-              thumbColor={manualApproval ? ACCENT : '#888'}
-            />
+          <View style={styles.bottomActions}>
+            <Pressable
+              onPress={() => router.back()}
+              style={({ pressed }) => [styles.cancelBtnWrap, pressed && { opacity: 0.7 }]}>
+              <View style={styles.cancelBtn}>
+                <Text style={styles.cancelText}>Annuler</Text>
+              </View>
+            </Pressable>
+            <Pressable
+              onPress={submit}
+              style={({ pressed }) => [styles.createBtnWrap, pressed && { transform: [{ scale: 0.985 }] }]}>
+              <LinearGradient
+                colors={[...BTN_GRADIENT]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.createBtn}>
+                <Text style={styles.createText}>✨ Créer l&apos;événement</Text>
+              </LinearGradient>
+            </Pressable>
           </View>
-
-          <Pressable
-            onPress={submit}
-            style={({ pressed }) => [styles.publishWrap, pressed && { transform: [{ scale: 0.985 }] }]}>
-            <LinearGradient
-              colors={[...BTN_GRADIENT]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.publishBtn}>
-              <Text style={styles.publishText}>✨ Publier l&apos;événement</Text>
-            </LinearGradient>
-          </Pressable>
+          
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -409,7 +478,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   headerBtn: {
-    width: 44,
+    minWidth: 60,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
@@ -422,203 +491,215 @@ const styles = StyleSheet.create({
     color: Design.textPrimary,
     letterSpacing: 0.2,
   },
+  headerCreateText: {
+    color: ACCENT,
+    fontSize: 17,
+    fontWeight: '700',
+  },
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 4,
   },
   photoZone: {
-    minHeight: 148,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 22,
+    width: '100%',
+    height: 200,
+    borderRadius: 24,
     overflow: 'hidden',
+    marginBottom: 24,
+    backgroundColor: CARD,
+    borderWidth: 1,
+    borderColor: BORDER,
   },
   photoPreview: {
     width: '100%',
-    minHeight: 160,
+    height: '100%',
   },
-  photoIconBg: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+  photoPlaceholder: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+  },
+  photoIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   photoHint: {
-    color: Design.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 15,
+    fontWeight: '600',
   },
-  photoSub: {
-    color: MUTED,
-    fontSize: 13,
-    marginTop: 4,
-  },
-  fieldLabelRow: {
+  photoEditBadge: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     gap: 6,
-    marginBottom: 8,
   },
-  fieldLabel: {
+  photoEditText: {
+    color: '#fff',
     fontSize: 13,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.72)',
   },
-  input: {
-    borderRadius: 14,
+  titleCardInput: {
+    minHeight: 64,
+    fontSize: 20,
+    fontWeight: '700',
+    color: Design.textPrimary,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
+  card: {
+    backgroundColor: CARD,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginBottom: 24,
+    overflow: 'hidden',
+  },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 16,
+    minHeight: 56,
+  },
+  cardRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  cardRowIcon: {
+    width: 24,
+    textAlign: 'center',
+    marginRight: 12,
+  },
+  cardRowContent: {
+    flex: 1,
+  },
+  cardInput: {
+    flex: 1,
+    height: '100%',
     fontSize: 16,
     color: Design.textPrimary,
-    backgroundColor: INPUT_BG,
-    borderWidth: 1,
-    borderColor: INPUT_BORDER,
-    marginBottom: 18,
+    paddingRight: 16,
   },
-  inputInRow: {
-    marginBottom: 0,
-    paddingRight: 36,
-  },
-  inputIconWrap: {
-    position: 'relative',
-    justifyContent: 'center',
-  },
-  inputTrailing: {
-    position: 'absolute',
-    right: 14,
-    top: '50%',
-    marginTop: -9,
-    pointerEvents: 'none',
-  },
-  row2: {
+  participantsRow: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 16,
   },
-  row2Col: {
-    flex: 1,
+  participantsLabel: {
+    color: Design.textPrimary,
+    fontSize: 16,
   },
-  rowLoc: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
+  participantsInput: {
+    fontSize: 16,
+    color: Design.textSecondary,
+    fontWeight: '700',
+    minWidth: 40,
+    paddingVertical: 12,
   },
-  rowLocMain: {
-    flex: 1,
-    minWidth: 0,
+  cardSection: {
+    marginBottom: 24,
   },
-  rowLocMax: {
-    width: 76,
-  },
-  sectionKicker: {
-    fontSize: 11,
+  sectionTitle: {
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.2,
     color: MUTED,
     marginBottom: 10,
-    marginTop: 2,
-  },
-  chipsRow: {
-    gap: 8,
-    paddingBottom: 18,
-    flexDirection: 'row',
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: INPUT_BG,
-    borderWidth: 1,
-    borderColor: INPUT_BORDER,
-    maxWidth: 200,
-  },
-  chipSelected: {
-    borderColor: 'rgba(155, 93, 229, 0.65)',
-    backgroundColor: 'rgba(155, 93, 229, 0.18)',
-  },
-  chipText: {
-    color: MUTED,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  chipTextSelected: {
-    color: Design.textPrimary,
-  },
-  descLabel: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: Design.textPrimary,
-    marginBottom: 8,
+    marginLeft: 16,
   },
   textarea: {
-    minHeight: 120,
-    paddingTop: 14,
-    marginBottom: 20,
+    minHeight: 100,
+    fontSize: 16,
+    color: Design.textPrimary,
+    paddingHorizontal: 16,
   },
-  optionCard: {
+  optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: INPUT_BG,
-    borderWidth: 1,
-    borderColor: INPUT_BORDER,
-    marginBottom: 10,
-    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 14,
   },
-  optionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(155, 93, 229, 0.12)',
+  optionBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: ACCENT,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  optionTextBlock: {
+  optionTextWrap: {
     flex: 1,
-    minWidth: 0,
   },
-  optionTitle: {
+  optionLabel: {
     color: Design.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  optionSub: {
+  optionSubLabel: {
     color: MUTED,
     fontSize: 12,
-    marginTop: 3,
-    lineHeight: 16,
+    marginTop: 2,
   },
-  publishWrap: {
+  bottomActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     marginTop: 8,
     marginBottom: 8,
+  },
+  cancelBtnWrap: {
+    flex: 1,
+  },
+  cancelBtn: {
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  cancelText: {
+    color: Design.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  createBtnWrap: {
+    flex: 2,
     borderRadius: 18,
     overflow: 'hidden',
     ...Platform.select({
       ios: {
         shadowColor: '#C23B8E',
-        shadowOffset: { width: 0, height: 10 },
+        shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.45,
-        shadowRadius: 22,
+        shadowRadius: 16,
       },
       android: {
-        elevation: 14,
+        elevation: 10,
       },
     }),
   },
-  publishBtn: {
-    paddingVertical: 17,
+  createBtn: {
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  publishText: {
+  createText: {
     color: '#fff',
     fontSize: 17,
     fontWeight: '800',

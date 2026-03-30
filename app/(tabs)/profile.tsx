@@ -20,7 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-type TabId = 'favorites' | 'friends' | 'past' | 'settings';
+type TabId = 'favorites' | 'friends' | 'history' | 'settings';
 
 const PINK = '#FF4B81';
 const PURPLE = '#8B5CF6';
@@ -96,6 +96,14 @@ export default function ProfileScreen() {
     [events, today],
   );
 
+  const historyEvents = useMemo(
+    () =>
+      [...events]
+        .filter((e) => eventParticipated(e))
+        .sort((a, b) => b.dateKey.localeCompare(a.dateKey)),
+    [events],
+  );
+
   const limits = getLimits();
 
   const tabBadge = (id: TabId): number => {
@@ -104,8 +112,8 @@ export default function ProfileScreen() {
         return favoriteEvents.length;
       case 'friends':
         return profileFriendsFromCsv.length;
-      case 'past':
-        return pastEvents.length;
+      case 'history':
+        return historyEvents.length;
       default:
         return 0;
     }
@@ -170,11 +178,11 @@ export default function ProfileScreen() {
             underlineColor={PURPLE}
           />
           <TabBtn
-            label={t('profile.tabPast')}
+            label="Historique"
             icon="time"
-            active={tab === 'past'}
-            onPress={() => canSeePast && setTab('past')}
-            badge={tabBadge('past')}
+            active={tab === 'history'}
+            onPress={() => canSeePast && setTab('history')}
+            badge={tabBadge('history')}
             badgeColor={GRAY_BADGE}
             underlineColor={GRAY_BADGE}
             locked={!canSeePast}
@@ -222,7 +230,7 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {tab === 'past' && (
+        {tab === 'history' && (
           <View style={styles.listBlock}>
             {!canSeePast ? (
               <View style={styles.lockedBox}>
@@ -230,16 +238,16 @@ export default function ProfileScreen() {
                 <Text style={styles.lockedTitle}>{t('profile.premiumExclusiveTitle')}</Text>
                 <Text style={styles.lockedSub}>{t('profile.premiumExclusiveBody')}</Text>
               </View>
-            ) : pastEvents.length === 0 ? (
-              <EmptyHint icon="time-outline" text={t('profile.emptyPast')} />
+            ) : historyEvents.length === 0 ? (
+              <EmptyHint icon="time-outline" text="Aucun historique" />
             ) : (
-              pastEvents.map((e) => (
+              historyEvents.map((e) => (
                 <EventRow
                   key={e.id}
                   event={e}
                   onPress={() => router.push(`/event/${e.id}`)}
-                  participated
-                  participatedLabel={t('profile.participated')}
+                  showHistoryBadge
+                  todayDateKey={today}
                 />
               ))
             )}
@@ -472,13 +480,18 @@ function EventRow({
   heart,
   participated,
   participatedLabel,
+  showHistoryBadge,
+  todayDateKey,
 }: {
   event: Event;
   onPress: () => void;
   heart?: boolean;
   participated?: boolean;
   participatedLabel?: string;
+  showHistoryBadge?: boolean;
+  todayDateKey?: string;
 }) {
+  const isUpcoming = todayDateKey ? event.dateKey >= todayDateKey : false;
   return (
     <Pressable
       onPress={onPress}
@@ -500,6 +513,11 @@ function EventRow({
           )}
         </Text>
       </View>
+      {showHistoryBadge && (
+        <View style={[styles.historyBadge, isUpcoming ? styles.historyBadgeActive : styles.historyBadgePast]}>
+          <Text style={styles.historyBadgeTxt}>{isUpcoming ? 'En cours' : 'Passé'}</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -653,6 +671,22 @@ const styles = StyleSheet.create({
   },
   eventTitle: { color: Design.textPrimary, fontWeight: '700', fontSize: 15 },
   eventMeta: { color: Design.textSecondary, fontSize: 12, marginTop: 4 },
+  historyBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  historyBadgeActive: {
+    backgroundColor: 'rgba(52, 211, 153, 0.15)',
+  },
+  historyBadgePast: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  historyBadgeTxt: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#fff',
+  },
   friendCard: {
     flexDirection: 'row',
     alignItems: 'center',
