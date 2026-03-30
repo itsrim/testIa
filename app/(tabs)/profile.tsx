@@ -1,10 +1,15 @@
 import { Design } from '@/constants/design';
+import {
+  PROFILE_BADGE_IDS,
+  useProfileIdentity,
+} from '@/context/ProfileIdentityContext';
 import { useProfileSettings, type RestrictionKey } from '@/context/ProfileSettingsContext';
 import { useMessaging } from '@/context/MessagingContext';
 import { profileFriendsFromCsv, profileMe } from '@/data/mockDataLoader';
 import { todayDateKey } from '@/lib/todayDateKey';
 import type { Event } from '@/types/messaging';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -16,6 +21,8 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -52,6 +59,8 @@ function eventParticipated(e: Event): boolean {
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const { width: winW, height: winH } = useWindowDimensions();
+  const heroH = Math.min(380, Math.round(winH * 0.44));
   const router = useRouter();
   const { t, i18n } = useTranslation();
   /** État local : le Switch natif ne suit pas toujours i18n si changeLanguage est async — on met à jour tout de suite au geste. */
@@ -73,7 +82,64 @@ export default function ProfileScreen() {
     resetToCsvDefaults,
   } = useProfileSettings();
 
+  const {
+    avatarUri,
+    displayName,
+    bio,
+    age,
+    badges,
+    setAvatarUri,
+    setDisplayName,
+    setBio,
+    setAge,
+    toggleBadge,
+  } = useProfileIdentity();
+
   const [tab, setTab] = useState<TabId>('favorites');
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [draftAge, setDraftAge] = useState('');
+  const [draftBio, setDraftBio] = useState('');
+
+  const visibleBadgeIds = useMemo(
+    () => PROFILE_BADGE_IDS.filter((id) => id !== 'admin' || isAdmin),
+    [isAdmin],
+  );
+
+  const openEdit = () => {
+    setDraftName(displayName);
+    setDraftAge(age);
+    setDraftBio(bio);
+    setEditing(true);
+  };
+
+  const saveEdit = () => {
+    setDisplayName(draftName.trim() || displayName);
+    setAge(draftAge.replace(/\D/g, '').slice(0, 3));
+    setBio(draftBio.trim());
+    setEditing(false);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+  };
+
+  const pickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(t('profile.photoPermissionTitle'), t('profile.photoPermissionBody'));
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.85,
+    });
+    if (!result.canceled && result.assets[0]?.uri) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  };
 
   const today = todayDateKey();
 
@@ -123,37 +189,137 @@ export default function ProfileScreen() {
   const canSeePast = isPremium || isAdmin;
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 12 }]}>
+    <View style={styles.root}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: Design.contentBottomSpace + 24 }}>
-        <View style={styles.header}>
-          <View style={styles.avatarRing}>
-            <Image source={{ uri: profileMe.avatarUrl }} style={styles.avatarImg} contentFit="cover" />
-            <View style={styles.verified}>
-              <Ionicons name="shield-checkmark" size={14} color="#fff" />
+        <View style={{ width: winW, height: heroH }}>
+          <Image
+            source={{ uri: avatarUri }}
+            style={StyleSheet.absoluteFillObject}
+            contentFit="cover"
+          />
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0.92)']}
+            locations={[0.4, 0.7, 1]}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={[styles.heroTopBar, { paddingTop: insets.top + 6 }]}>
+            <View style={{ flex: 1 }} />
+            <Pressable
+              onPress={pickAvatar}
+              accessibilityLabel={t('profile.changePhoto')}
+              style={({ pressed }) => [styles.heroIconBtn, pressed && { opacity: 0.75 }]}>
+              <Ionicons name="camera" size={22} color="#fff" />
+            </Pressable>
+          </View>
+          <View style={styles.heroBottom}>
+            {!editing ? (
+              <Text style={styles.heroName} numberOfLines={2}>
+                {displayName}
+                {age.trim() ? `, ${age.trim()}` : ''}
+              </Text>
+            ) : (
+              <View style={{ gap: 6, alignSelf: 'stretch' }}>
+                <Text style={styles.editFieldLblLight}>{t('profile.nameLabel')}</Text>
+                <TextInput
+                  value={draftName}
+                  onChangeText={setDraftName}
+                  style={styles.heroEditInput}
+                  placeholderTextColor="rgba(255,255,255,0.45)"
+                  placeholder={t('profile.nameLabel')}
+                />
+                <Text style={styles.editFieldLblLight}>{t('profile.ageLabel')}</Text>
+                <TextInput
+                  value={draftAge}
+                  onChangeText={setDraftAge}
+                  keyboardType="number-pad"
+                  style={styles.heroEditInput}
+                  placeholderTextColor="rgba(255,255,255,0.45)"
+                  placeholder="—"
+                />
+              </View>
+            )}
+            <View style={styles.verifiedRow}>
+              <Ionicons name="shield-checkmark" size={16} color="#22C55E" />
+              <Text style={styles.verifiedTxt}>{t('profile.verifiedProfile')}</Text>
             </View>
           </View>
-          <Text style={styles.displayName}>{profileMe.displayName}</Text>
-          <Text style={styles.memberSince}>
-            {t('profile.memberSince', { year: profileMe.memberSince })}
-          </Text>
         </View>
 
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNum}>{profileMe.reliabilityScore}</Text>
-            <Text style={styles.statLbl}>{t('profile.statsReliability')}</Text>
+        <View style={styles.contentPad}>
+          <View style={styles.bioCard}>
+            {!editing ? (
+              <Text style={styles.bioText}>{bio || '—'}</Text>
+            ) : (
+              <>
+                <Text style={styles.editFieldLblDark}>{t('profile.bioPlaceholder')}</Text>
+                <TextInput
+                  value={draftBio}
+                  onChangeText={setDraftBio}
+                  style={styles.bioInput}
+                  multiline
+                  placeholderTextColor={Design.textSecondary}
+                />
+              </>
+            )}
+            <View style={styles.bioSep} />
+            <View style={styles.memberRow}>
+              <Ionicons name="calendar-outline" size={16} color={Design.textSecondary} />
+              <Text style={styles.memberSinceInCard}>
+                {t('profile.memberSince', { year: profileMe.memberSince })}
+              </Text>
+            </View>
+            <View style={styles.editActionsRow}>
+              {!editing ? (
+                <Pressable onPress={openEdit} style={styles.editProfileBtn}>
+                  <Ionicons name="pencil" size={16} color={GOLD} />
+                  <Text style={styles.editProfileBtnTxt}>{t('profile.editProfile')}</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.saveCancelRow}>
+                  <Pressable onPress={cancelEdit} style={styles.secondaryBtn}>
+                    <Text style={styles.secondaryBtnTxt}>{t('profile.cancel')}</Text>
+                  </Pressable>
+                  <Pressable onPress={saveEdit} style={styles.primaryBtn}>
+                    <Text style={styles.primaryBtnTxt}>{t('profile.save')}</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNum}>{myUpcoming.length}</Text>
-            <Text style={styles.statLbl}>{t('profile.statsUpcoming')}</Text>
+
+          <Text style={styles.badgesSectionTitle}>{t('profile.badgesSection')}</Text>
+          <View style={styles.badgesWrap}>
+            {visibleBadgeIds.map((id) => {
+              const on = badges.includes(id);
+              return (
+                <Pressable
+                  key={id}
+                  onPress={() => toggleBadge(id)}
+                  style={[styles.badgeChip, on && styles.badgeChipOn]}>
+                  <Text style={[styles.badgeChipTxt, on && styles.badgeChipTxtOn]}>
+                    {t(`profile.badgeLabels.${id}`)}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
-          <View style={styles.statCard}>
-            <Text style={[styles.statNum, { color: '#34D399' }]}>0</Text>
-            <Text style={styles.statLbl}>{t('profile.statsNoShows')}</Text>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <Text style={[styles.statNum, { color: GOLD }]}>{profileMe.reliabilityScore}</Text>
+              <Text style={styles.statLbl}>{t('profile.statsReliability')}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={[styles.statNum, { color: PURPLE }]}>{myUpcoming.length}</Text>
+              <Text style={styles.statLbl}>{t('profile.statsUpcoming')}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={[styles.statNum, { color: '#9CA3AF' }]}>0</Text>
+              <Text style={styles.statLbl}>{t('profile.statsNoShows')}</Text>
+            </View>
           </View>
-        </View>
 
         <ScrollView
           horizontal
@@ -179,7 +345,7 @@ export default function ProfileScreen() {
             underlineColor={PURPLE}
           />
           <TabBtn
-            label="Historique"
+            label={t('profile.tabPast')}
             icon="time"
             active={tab === 'history'}
             onPress={() => canSeePast && setTab('history')}
@@ -436,6 +602,7 @@ export default function ProfileScreen() {
             <Text style={styles.autoSave}>{t('profile.sessionNote')}</Text>
           </View>
         )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -597,36 +764,162 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: Design.bg,
-    paddingHorizontal: 16,
   },
-  header: { alignItems: 'center', marginBottom: 20 },
-  avatarRing: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
-    borderColor: '#2C2C2E',
-    marginBottom: 12,
-    position: 'relative',
-  },
-  avatarImg: { width: '100%', height: '100%', borderRadius: 48 },
-  verified: {
+  heroTopBar: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    backgroundColor: '#22C55E',
-    borderRadius: 14,
-    padding: 4,
-    borderWidth: 2,
-    borderColor: Design.bg,
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    zIndex: 2,
   },
-  displayName: {
-    color: Design.textPrimary,
-    fontSize: 20,
+  heroIconBtn: {
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  heroBottom: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    zIndex: 1,
+  },
+  heroName: {
+    color: '#fff',
+    fontSize: 28,
     fontWeight: '800',
-    marginBottom: 4,
+    letterSpacing: -0.5,
   },
-  memberSince: { color: Design.textSecondary, fontSize: 14 },
+  verifiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  verifiedTxt: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  editFieldLblLight: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  heroEditInput: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.35)',
+    color: '#fff',
+    paddingVertical: 6,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  contentPad: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  bioCard: {
+    backgroundColor: CARD,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    marginBottom: 16,
+  },
+  bioText: {
+    color: Design.textPrimary,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  bioSep: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: BORDER,
+    marginVertical: 14,
+  },
+  memberRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  memberSinceInCard: { color: Design.textSecondary, fontSize: 13 },
+  editActionsRow: { marginTop: 14 },
+  editProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editProfileBtnTxt: { color: GOLD, fontWeight: '700', fontSize: 15 },
+  editFieldLblDark: {
+    color: Design.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  bioInput: {
+    color: Design.textPrimary,
+    minHeight: 88,
+    textAlignVertical: 'top',
+    backgroundColor: '#2C2C2E',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  saveCancelRow: { flexDirection: 'row', gap: 10 },
+  secondaryBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#2C2C2E',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  secondaryBtnTxt: { color: Design.textPrimary, fontWeight: '700' },
+  primaryBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: PURPLE,
+    alignItems: 'center',
+  },
+  primaryBtnTxt: { color: '#fff', fontWeight: '800' },
+  badgesSectionTitle: {
+    color: Design.textSecondary,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  badgesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
+  },
+  badgeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  badgeChipOn: {
+    borderColor: PURPLE,
+    backgroundColor: 'rgba(139, 92, 246, 0.22)',
+  },
+  badgeChipTxt: {
+    color: Design.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  badgeChipTxtOn: {
+    color: GOLD,
+    fontWeight: '700',
+  },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard: {
     flex: 1,

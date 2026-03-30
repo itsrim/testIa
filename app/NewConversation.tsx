@@ -15,27 +15,27 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function NouvelleConversationScreen() {
+export default function NewConversationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { createEmptyGroup } = useMessaging();
-  const [name, setName] = useState('');
+  const [groupName, setGroupName] = useState('');
 
   const cancel = () => router.back();
 
   const submit = () => {
-    const t = name.trim();
-    if (!t) {
-      Alert.alert('Nom requis', 'Donnez un nom à votre groupe.');
+    const trimmedName = groupName.trim();
+    if (!trimmedName) {
+      Alert.alert('Name required', 'Please provide a name for your group.');
       return;
     }
-    const id = createEmptyGroup(t);
+    const id = createEmptyGroup(trimmedName);
     router.replace(`/chat/${id}`);
   };
 
   return (
     <View style={styles.screen}>
-      <Pressable style={styles.backdrop} onPress={cancel} accessibilityLabel="Fermer" />
+      <Pressable style={styles.backdrop} onPress={cancel} accessibilityLabel="Close" />
       <View style={styles.foreground} pointerEvents="box-none">
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -50,36 +50,36 @@ export default function NouvelleConversationScreen() {
                 marginTop: Math.max(insets.top, 24),
               },
             ]}>
-          <Text style={styles.title}>Créer un groupe</Text>
+          <Text style={styles.title}>Create a group</Text>
 
           <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Nom du groupe…"
+            value={groupName}
+            onChangeText={setGroupName}
+            placeholder="Group name..."
             placeholderTextColor="#8E8E93"
             style={styles.input}
             autoFocus
             maxLength={80}
             returnKeyType="done"
             onSubmitEditing={submit}
-            accessibilityLabel="Nom du groupe"
+            accessibilityLabel="Group name"
           />
 
           <View style={styles.actions}>
             <Pressable onPress={cancel} hitSlop={12} style={styles.btnCancelWrap} accessibilityRole="button">
-              <Text style={styles.btnCancelText}>Annuler</Text>
+              <Text style={styles.btnCancelText}>Cancel</Text>
             </Pressable>
             <Pressable
               onPress={submit}
               style={({ pressed }) => [styles.btnCreateWrap, pressed && { opacity: 0.92 }]}
               accessibilityRole="button"
-              accessibilityLabel="Créer le groupe">
+              accessibilityLabel="Create group">
               <LinearGradient
                 colors={['#E8B923', '#F0A030', '#E85D75']}
                 start={{ x: 0, y: 0.5 }}
                 end={{ x: 1, y: 0.5 }}
                 style={styles.btnCreateGradient}>
-                <Text style={styles.btnCreateText}>Créer</Text>
+                <Text style={styles.btnCreateText}>Create</Text>
               </LinearGradient>
             </Pressable>
           </View>

@@ -498,7 +498,7 @@ export default function ChatListScreen() {
                   onPress={() => router.push(`/chat/${c.id}`)}
                 />
               ))}
-              <FavoriteNewGroupStripItem onPress={() => router.push('/nouvelle-conversation')} />
+              <FavoriteNewGroupStripItem onPress={() => router.push('/NewConversation')} />
             </ScrollView>
             <LinearGradient
               pointerEvents="none"
