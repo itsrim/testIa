@@ -6,10 +6,15 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { playIncomingMessageFeedback } from '@/lib/playIncomingMessageFeedback';
 import { verifyAndRepairData } from '@/lib/dataIntegrity';
-import { mockMessagingSeed } from '@/data/mockDataLoader';
+import {
+  getEvents,
+  getPersistedMessagingChat,
+  mockMessagingSeed,
+  putEvents,
+  putPersistedMessagingChat,
+} from '@/services/dataApi';
 import {
   groupHasFriendForMessages,
   type Conversation,
@@ -132,21 +137,39 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const [groupSettingsByConversation, setGroupSettingsByConversation] = useState<
     Record<string, GroupChatSettings>
   >({});
+  const [chatRestored, setChatRestored] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const storedEvents = await AsyncStorage.getItem('events_data');
-        if (storedEvents) {
-          const parsed = JSON.parse(storedEvents) as Event[];
-          if (parsed && Array.isArray(parsed) && parsed.length > 0) {
-            setEvents(parsed);
-          }
-        }
+        const loaded = await getEvents();
+        setEvents(loaded);
       } catch (err) {
-        console.warn('Failed to load events from storage', err);
+        console.warn('Failed to load events from dataApi', err);
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const p = await getPersistedMessagingChat();
+        if (!alive) return;
+        if (p) {
+          setConversations(p.conversations);
+          setMessagesByConversation(p.messagesByConversation);
+          setMembersByConversation(p.membersByConversation);
+        }
+      } catch (err) {
+        console.warn('Failed to load messaging chat from dataApi', err);
+      } finally {
+        if (alive) setChatRestored(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const cleanData = useCallback(() => {
@@ -162,13 +185,20 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const mounted = React.useRef(false);
   useEffect(() => {
     if (mounted.current) {
-      AsyncStorage.setItem('events_data', JSON.stringify(events)).catch((err) =>
-        console.warn('Failed to save events to storage', err)
-      );
+      void putEvents(events).catch((err) => console.warn('Failed to save events via dataApi', err));
     } else {
       mounted.current = true;
     }
   }, [events]);
+
+  useEffect(() => {
+    if (!chatRestored) return;
+    void putPersistedMessagingChat({
+      conversations,
+      messagesByConversation,
+      membersByConversation,
+    }).catch((err) => console.warn('Failed to save messaging chat via dataApi', err));
+  }, [conversations, messagesByConversation, membersByConversation, chatRestored]);
 
   const messagesTabBadgeCount = useMemo(() => sumUnread(conversations), [conversations]);
   const visitesTabBadgeCount = mockMessagingSeed.visitesTabBadgeCount;

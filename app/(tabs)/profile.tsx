@@ -5,7 +5,8 @@ import {
 } from '@/context/ProfileIdentityContext';
 import { useProfileSettings, type RestrictionKey } from '@/context/ProfileSettingsContext';
 import { useMessaging } from '@/context/MessagingContext';
-import { profileFriendsFromCsv, profileMe } from '@/data/mockDataLoader';
+import type { ProfileFriendRow, ProfileMeRow } from '@/data/mockDataLoader';
+import { getUsersFriends, getUsersMe } from '@/services/dataApi';
 import { todayDateKey } from '@/lib/todayDateKey';
 import type { Event } from '@/types/messaging';
 import { Image } from 'expo-image';
@@ -96,6 +97,21 @@ export default function ProfileScreen() {
   } = useProfileIdentity();
 
   const [tab, setTab] = useState<TabId>('favorites');
+  const [meCsv, setMeCsv] = useState<ProfileMeRow | null>(null);
+  const [friendsCsv, setFriendsCsv] = useState<ProfileFriendRow[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    void Promise.all([getUsersMe(), getUsersFriends()]).then(([me, friends]) => {
+      if (alive) {
+        setMeCsv(me);
+        setFriendsCsv(friends);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftAge, setDraftAge] = useState('');
@@ -178,7 +194,7 @@ export default function ProfileScreen() {
       case 'favorites':
         return favoriteEvents.length;
       case 'friends':
-        return profileFriendsFromCsv.length;
+        return friendsCsv.length;
       case 'history':
         return historyEvents.length;
       default:
@@ -187,6 +203,14 @@ export default function ProfileScreen() {
   };
 
   const canSeePast = isPremium || isAdmin;
+
+  if (!meCsv) {
+    return (
+      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: Design.textSecondary }}>…</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -267,7 +291,7 @@ export default function ProfileScreen() {
             <View style={styles.memberRow}>
               <Ionicons name="calendar-outline" size={16} color={Design.textSecondary} />
               <Text style={styles.memberSinceInCard}>
-                {t('profile.memberSince', { year: profileMe.memberSince })}
+                {t('profile.memberSince', { year: meCsv.memberSince })}
               </Text>
             </View>
             <View style={styles.editActionsRow}>
@@ -308,7 +332,7 @@ export default function ProfileScreen() {
 
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
-              <Text style={[styles.statNum, { color: GOLD }]}>{profileMe.reliabilityScore}</Text>
+              <Text style={[styles.statNum, { color: GOLD }]}>{meCsv.reliabilityScore}</Text>
               <Text style={styles.statLbl}>{t('profile.statsReliability')}</Text>
             </View>
             <View style={styles.statCard}>
@@ -377,7 +401,7 @@ export default function ProfileScreen() {
 
         {tab === 'friends' && (
           <View style={styles.listBlock}>
-            {profileFriendsFromCsv.map((f) => (
+            {friendsCsv.map((f) => (
               <Pressable
                 key={f.profilId}
                 onPress={() => router.push(`/profil/${f.profilId}`)}

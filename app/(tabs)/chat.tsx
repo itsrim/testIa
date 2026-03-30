@@ -1,18 +1,15 @@
 import { Design } from '@/constants/design';
 import { useMessaging } from '@/context/MessagingContext';
-import { mockProfileVisits, type MockProfileVisit } from '@/data/mockDataLoader';
-import {
-  formatSuggestionCaption,
-  MOCK_SUGGESTION_PROFILES,
-  type SuggestionProfile,
-} from '@/data/suggestionProfiles';
+import type { MockProfileVisit } from '@/data/mockDataLoader';
+import { getProfileVisits, getSuggestionProfiles } from '@/services/dataApi';
+import { formatSuggestionCaption, type SuggestionProfile } from '@/data/suggestionProfiles';
 import { formatBadgeCount } from '@/lib/formatBadgeCount';
 import type { Conversation } from '@/types/messaging';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Platform,
@@ -446,6 +443,16 @@ export default function ChatListScreen() {
   const [sub, setSub] = useState<SubTab>('messages');
   const [visitLikedById, setVisitLikedById] = useState<Record<string, boolean>>({});
   const [suggestionLikedById, setSuggestionLikedById] = useState<Record<string, boolean>>({});
+  const [profileVisits, setProfileVisits] = useState<MockProfileVisit[]>([]);
+  const [suggestionProfiles, setSuggestionProfiles] = useState<SuggestionProfile[]>([]);
+
+  useEffect(() => {
+    void getProfileVisits().then(setProfileVisits);
+  }, []);
+
+  useEffect(() => {
+    void getSuggestionProfiles().then(setSuggestionProfiles);
+  }, []);
 
   const toggleVisitLike = useCallback((id: string) => {
     setVisitLikedById((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -456,8 +463,8 @@ export default function ChatListScreen() {
   }, []);
 
   const suggestionColumns = useMemo(
-    () => buildMasonryColumns(MOCK_SUGGESTION_PROFILES, 3),
-    [],
+    () => buildMasonryColumns(suggestionProfiles, 3),
+    [suggestionProfiles],
   );
 
   const sorted = useMemo(
@@ -570,7 +577,7 @@ export default function ChatListScreen() {
         />
       ) : sub === 'visites' ? (
         <FlatList
-          data={mockProfileVisits}
+          data={profileVisits}
           keyExtractor={(v) => v.id}
           style={styles.list}
           showsVerticalScrollIndicator={false}
