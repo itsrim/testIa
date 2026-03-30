@@ -1,0 +1,74 @@
+{
+  "nav": {
+    "home": "Home",
+    "chat": "Chat",
+    "events": "Events",
+    "profile": "Profile"
+  },
+  "profile": {
+    "memberSince": "Member since {{year}}",
+    "statsReliability": "Reliability",
+    "statsUpcoming": "Upcoming",
+    "statsNoShows": "No-shows",
+    "tabFavorites": "Favorites",
+    "tabFriends": "Friends",
+    "tabPast": "Past",
+    "tabSettings": "Settings",
+    "commonEvents": "{{count}} events in common",
+    "view": "View",
+    "participated": "Attended",
+    "emptyFavorites": "No favorite events.",
+    "emptyPast": "No past events.",
+    "premiumExclusiveTitle": "Premium only",
+    "premiumExclusiveBody": "Enable Premium or admin mode in Settings to see your history.",
+    "premiumOnTitle": "Premium enabled",
+    "premiumOnSubtitle": "All features unlocked",
+    "freeModeTitle": "Free mode",
+    "freeModeSubtitle": "Limited features",
+    "adminOnSubtitle": "Unlimited access to past dates",
+    "adminOffSubtitle": "Standard user mode",
+    "adminTitle": "Admin mode",
+    "language": "Language",
+    "sectionParams": "Parameters",
+    "maxParticipantsRow": "Max participants per event",
+    "maxRegistrationsRow": "Max sign-ups",
+    "maxFavoritesRow": "Max favorites",
+    "maxActiveEventsRow": "Max active events",
+    "restrictionsFreeTitle": "Free mode restrictions",
+    "restrictionsControlTitle": "Restriction control",
+    "resetSettings": "Reset settings",
+    "sessionNote": "Changes apply for this session (CSV source on reset).",
+    "langFr": "Français",
+    "langEn": "English",
+    "restrictions": {
+      "blurProfiles": {
+        "title": "Blurred profiles",
+        "subtitle": "Photos, names and ages of users are blurred"
+      },
+      "disableMessages": {
+        "title": "Messages disabled",
+        "subtitle": "Messages tab not available"
+      },
+      "blurEventAddress": {
+        "title": "Blurred addresses (legacy)",
+        "subtitle": "Managed by each event organizer"
+      },
+      "limitEventCreation": {
+        "title": "Limited creation (1 event)",
+        "subtitle": "At most 1 active event at a time"
+      },
+      "limitParticipants": {
+        "title": "Limited participants (8 max)",
+        "subtitle": "Premium: up to 20 participants"
+      },
+      "limitRegistrations": {
+        "title": "Limited sign-ups (3 max)",
+        "subtitle": "Max 3 sign-ups and 3 favorites. Premium: 10"
+      },
+      "disableSearch": {
+        "title": "Search disabled",
+        "subtitle": "Event search is reserved for Premium users"
+      }
+    }
+  }
+}

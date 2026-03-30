@@ -1,0 +1,74 @@
+{
+  "nav": {
+    "home": "Accueil",
+    "chat": "Chat",
+    "events": "Agenda",
+    "profile": "Profil"
+  },
+  "profile": {
+    "memberSince": "Membre depuis {{year}}",
+    "statsReliability": "Fiabilité",
+    "statsUpcoming": "À venir",
+    "statsNoShows": "No-shows",
+    "tabFavorites": "Favoris",
+    "tabFriends": "Amis",
+    "tabPast": "Passés",
+    "tabSettings": "Paramètres",
+    "commonEvents": "{{count}} événements en commun",
+    "view": "Voir",
+    "participated": "Participé",
+    "emptyFavorites": "Aucun événement en favoris.",
+    "emptyPast": "Aucun événement passé.",
+    "premiumExclusiveTitle": "Réservé au Premium",
+    "premiumExclusiveBody": "Activez Premium ou le mode admin dans Paramètres pour voir l’historique.",
+    "premiumOnTitle": "Premium activé",
+    "premiumOnSubtitle": "Toutes les fonctionnalités débloquées",
+    "freeModeTitle": "Mode gratuit",
+    "freeModeSubtitle": "Fonctionnalités limitées",
+    "adminOnSubtitle": "Accès illimité aux dates passées",
+    "adminOffSubtitle": "Mode utilisateur standard",
+    "adminTitle": "Mode admin",
+    "language": "Langue",
+    "sectionParams": "Paramètres",
+    "maxParticipantsRow": "Participants max par événement",
+    "maxRegistrationsRow": "Inscriptions max",
+    "maxFavoritesRow": "Favoris max",
+    "maxActiveEventsRow": "Événements actifs max",
+    "restrictionsFreeTitle": "Restrictions mode gratuit",
+    "restrictionsControlTitle": "Contrôle des restrictions",
+    "resetSettings": "Réinitialiser les paramètres",
+    "sessionNote": "Les changements s’appliquent pour cette session (source CSV au reset).",
+    "langFr": "Français",
+    "langEn": "English",
+    "restrictions": {
+      "blurProfiles": {
+        "title": "Profils floutés",
+        "subtitle": "Photos, noms et âges des utilisateurs floutés"
+      },
+      "disableMessages": {
+        "title": "Messages désactivés",
+        "subtitle": "Onglet Messages non accessible"
+      },
+      "blurEventAddress": {
+        "title": "Adresses floutées (obsolète)",
+        "subtitle": "Géré par l’organisateur de chaque événement"
+      },
+      "limitEventCreation": {
+        "title": "Création limitée (1 événement)",
+        "subtitle": "Maximum 1 événement actif à la fois"
+      },
+      "limitParticipants": {
+        "title": "Participants limités (8 max)",
+        "subtitle": "Premium : jusqu’à 20 participants"
+      },
+      "limitRegistrations": {
+        "title": "Inscriptions limitées (3 max)",
+        "subtitle": "Max 3 participations et 3 favoris. Premium : 10"
+      },
+      "disableSearch": {
+        "title": "Recherche désactivée",
+        "subtitle": "La recherche d’événements est réservée aux Premium"
+      }
+    }
+  }
+}

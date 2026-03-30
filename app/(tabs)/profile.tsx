@@ -7,7 +7,8 @@ import type { Event } from '@/types/messaging';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Pressable,
   ScrollView,
@@ -27,47 +28,21 @@ const GRAY_BADGE = '#6B7280';
 const GOLD = '#FBBF24';
 const CARD = '#1C1C1E';
 const BORDER = 'rgba(255,255,255,0.08)';
+/** Restrictions : désactivé ou OFF = neutre blanc/gris ; ON (premium) = jaune + violet (pas de vert). */
+const SWITCH_RESTRICTION_DISABLED_TRACK = '#D1D5DB';
+const SWITCH_RESTRICTION_OFF_TRACK = '#E8E8E8';
+const SWITCH_RESTRICTION_ON_TRACK = Design.badgeGold;
+const SWITCH_RESTRICTION_THUMB_ON = PURPLE;
+const SWITCH_RESTRICTION_THUMB_OFF_OR_DISABLED = '#FFFFFF';
 
-const RESTRICTION_ROWS: {
-  key: RestrictionKey;
-  title: string;
-  subtitle: string;
-}[] = [
-  {
-    key: 'blurProfiles',
-    title: 'Profils floutés',
-    subtitle: 'Photos, noms et âges des utilisateurs floutés',
-  },
-  {
-    key: 'disableMessages',
-    title: 'Messages désactivés',
-    subtitle: 'Onglet Messages non accessible',
-  },
-  {
-    key: 'blurEventAddress',
-    title: 'Adresses floutées (obsolète)',
-    subtitle: 'Géré par l’organisateur de chaque événement',
-  },
-  {
-    key: 'limitEventCreation',
-    title: 'Création limitée (1 événement)',
-    subtitle: 'Maximum 1 événement actif à la fois',
-  },
-  {
-    key: 'limitParticipants',
-    title: 'Participants limités (8 max)',
-    subtitle: 'Premium : jusqu’à 20 participants',
-  },
-  {
-    key: 'limitRegistrations',
-    title: 'Inscriptions limitées (3 max)',
-    subtitle: 'Max 3 participations et 3 favoris. Premium : 10',
-  },
-  {
-    key: 'disableSearch',
-    title: 'Recherche désactivée',
-    subtitle: 'La recherche d’événements est réservée aux Premium',
-  },
+const RESTRICTION_ORDER: RestrictionKey[] = [
+  'blurProfiles',
+  'disableMessages',
+  'blurEventAddress',
+  'limitEventCreation',
+  'limitParticipants',
+  'limitRegistrations',
+  'disableSearch',
 ];
 
 function eventParticipated(e: Event): boolean {
@@ -77,6 +52,14 @@ function eventParticipated(e: Event): boolean {
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { t, i18n } = useTranslation();
+  /** État local : le Switch natif ne suit pas toujours i18n si changeLanguage est async — on met à jour tout de suite au geste. */
+  const [langEn, setLangEn] = useState(() => i18n.language.startsWith('en'));
+
+  useEffect(() => {
+    setLangEn(i18n.language.startsWith('en'));
+  }, [i18n.language]);
+
   const { events } = useMessaging();
   const {
     isPremium,
@@ -143,21 +126,23 @@ export default function ProfileScreen() {
             </View>
           </View>
           <Text style={styles.displayName}>{profileMe.displayName}</Text>
-          <Text style={styles.memberSince}>Membre depuis {profileMe.memberSince}</Text>
+          <Text style={styles.memberSince}>
+            {t('profile.memberSince', { year: profileMe.memberSince })}
+          </Text>
         </View>
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statNum}>{profileMe.reliabilityScore}</Text>
-            <Text style={styles.statLbl}>Fiabilité</Text>
+            <Text style={styles.statLbl}>{t('profile.statsReliability')}</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statNum}>{myUpcoming.length}</Text>
-            <Text style={styles.statLbl}>À venir</Text>
+            <Text style={styles.statLbl}>{t('profile.statsUpcoming')}</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={[styles.statNum, { color: '#34D399' }]}>0</Text>
-            <Text style={styles.statLbl}>No-shows</Text>
+            <Text style={styles.statLbl}>{t('profile.statsNoShows')}</Text>
           </View>
         </View>
 
@@ -167,7 +152,7 @@ export default function ProfileScreen() {
           contentContainerStyle={styles.tabsRow}
           style={{ marginBottom: 16 }}>
           <TabBtn
-            label="Favoris"
+            label={t('profile.tabFavorites')}
             icon="heart"
             active={tab === 'favorites'}
             onPress={() => setTab('favorites')}
@@ -176,7 +161,7 @@ export default function ProfileScreen() {
             underlineColor={PINK}
           />
           <TabBtn
-            label="Amis"
+            label={t('profile.tabFriends')}
             icon="people"
             active={tab === 'friends'}
             onPress={() => setTab('friends')}
@@ -185,7 +170,7 @@ export default function ProfileScreen() {
             underlineColor={PURPLE}
           />
           <TabBtn
-            label="Passés"
+            label={t('profile.tabPast')}
             icon="time"
             active={tab === 'past'}
             onPress={() => canSeePast && setTab('past')}
@@ -195,7 +180,7 @@ export default function ProfileScreen() {
             locked={!canSeePast}
           />
           <TabBtn
-            label="Paramètres"
+            label={t('profile.tabSettings')}
             icon="settings-outline"
             active={tab === 'settings'}
             onPress={() => setTab('settings')}
@@ -206,7 +191,7 @@ export default function ProfileScreen() {
         {tab === 'favorites' && (
           <View style={styles.listBlock}>
             {favoriteEvents.length === 0 ? (
-              <EmptyHint icon="heart-outline" text="Aucun événement en favoris." />
+              <EmptyHint icon="heart-outline" text={t('profile.emptyFavorites')} />
             ) : (
               favoriteEvents.map((e) => (
                 <EventRow key={e.id} event={e} onPress={() => router.push(`/event/${e.id}`)} heart />
@@ -226,11 +211,11 @@ export default function ProfileScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.friendName}>{f.name}</Text>
                   <Text style={styles.friendSub}>
-                    {f.eventsInCommon} événements en commun
+                    {t('profile.commonEvents', { count: f.eventsInCommon })}
                   </Text>
                 </View>
                 <LinearGradient colors={['#6B21A8', PURPLE]} style={styles.voirBtn}>
-                  <Text style={styles.voirTxt}>Voir</Text>
+                  <Text style={styles.voirTxt}>{t('profile.view')}</Text>
                 </LinearGradient>
               </Pressable>
             ))}
@@ -242,16 +227,20 @@ export default function ProfileScreen() {
             {!canSeePast ? (
               <View style={styles.lockedBox}>
                 <Ionicons name="lock-closed" size={28} color={GOLD} />
-                <Text style={styles.lockedTitle}>Réservé au Premium</Text>
-                <Text style={styles.lockedSub}>
-                  Activez Premium ou le mode admin dans Paramètres pour voir l’historique.
-                </Text>
+                <Text style={styles.lockedTitle}>{t('profile.premiumExclusiveTitle')}</Text>
+                <Text style={styles.lockedSub}>{t('profile.premiumExclusiveBody')}</Text>
               </View>
             ) : pastEvents.length === 0 ? (
-              <EmptyHint icon="time-outline" text="Aucun événement passé." />
+              <EmptyHint icon="time-outline" text={t('profile.emptyPast')} />
             ) : (
               pastEvents.map((e) => (
-                <EventRow key={e.id} event={e} onPress={() => router.push(`/event/${e.id}`)} participated />
+                <EventRow
+                  key={e.id}
+                  event={e}
+                  onPress={() => router.push(`/event/${e.id}`)}
+                  participated
+                  participatedLabel={t('profile.participated')}
+                />
               ))
             )}
           </View>
@@ -273,8 +262,8 @@ export default function ProfileScreen() {
                   style={styles.bigCardInner}>
                   <SettingsCardInner
                     icon="star"
-                    title="Premium activé"
-                    subtitle="Toutes les fonctionnalités débloquées"
+                    title={t('profile.premiumOnTitle')}
+                    subtitle={t('profile.premiumOnSubtitle')}
                     switchOn={isPremium}
                   />
                 </LinearGradient>
@@ -282,8 +271,8 @@ export default function ProfileScreen() {
                 <View style={[styles.bigCardInner, { backgroundColor: CARD }]}>
                   <SettingsCardInner
                     icon="star-outline"
-                    title="Mode gratuit"
-                    subtitle="Fonctionnalités limitées"
+                    title={t('profile.freeModeTitle')}
+                    subtitle={t('profile.freeModeSubtitle')}
                     switchOn={isPremium}
                   />
                 </View>
@@ -299,8 +288,8 @@ export default function ProfileScreen() {
                   style={styles.bigCardInner}>
                   <SettingsCardInner
                     icon="shield"
-                    title="Admin mode"
-                    subtitle="Accès illimité aux dates passées"
+                    title={t('profile.adminTitle')}
+                    subtitle={t('profile.adminOnSubtitle')}
                     switchOn={isAdmin}
                     light
                   />
@@ -309,8 +298,8 @@ export default function ProfileScreen() {
                 <View style={[styles.bigCardInner, { backgroundColor: CARD }]}>
                   <SettingsCardInner
                     icon="shield-outline"
-                    title="Admin mode"
-                    subtitle="Mode utilisateur standard"
+                    title={t('profile.adminTitle')}
+                    subtitle={t('profile.adminOffSubtitle')}
                     switchOn={isAdmin}
                   />
                 </View>
@@ -318,26 +307,41 @@ export default function ProfileScreen() {
             </Pressable>
 
             <View style={[styles.bigCard, { backgroundColor: CARD }]}>
-              <View style={styles.bigCardInner}>
-                <View style={styles.langRow}>
-                  <View style={styles.globeBox}>
-                    <Ionicons name="globe-outline" size={24} color="#0284C7" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>Langue</Text>
-                    <Text style={styles.cardSub}>Français (démo)</Text>
-                  </View>
+              <View style={[styles.bigCardInner, styles.langCardRow]}>
+                <View style={styles.globeBox}>
+                  <Ionicons name="globe-outline" size={24} color="#0284C7" />
+                </View>
+                <View style={styles.langTexts}>
+                  <Text style={styles.langTitle}>{t('profile.language')}</Text>
+                  <Text style={styles.langSub}>
+                    {!langEn ? t('profile.langFr') : t('profile.langEn')}
+                  </Text>
+                </View>
+                <View style={styles.langToggleRow}>
+                  <Text style={[styles.langToggleLbl, !langEn && styles.langToggleLblActive]}>FR</Text>
+                  <Switch
+                    accessibilityLabel={t('profile.language')}
+                    value={langEn}
+                    onValueChange={(useEn) => {
+                      setLangEn(useEn);
+                      void i18n.changeLanguage(useEn ? 'en' : 'fr');
+                    }}
+                    trackColor={{ false: '#3A3A3C', true: '#0284C7' }}
+                    thumbColor="#FFFFFF"
+                    ios_backgroundColor="#3A3A3C"
+                  />
+                  <Text style={[styles.langToggleLbl, langEn && styles.langToggleLblActive]}>EN</Text>
                 </View>
               </View>
             </View>
 
             <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>Paramètres</Text>
-              <Row label="Participants max par événement" value={String(limits.maxParticipants)} />
-              <Row label="Inscriptions max" value={String(limits.maxRegistrations)} />
-              <Row label="Favoris max" value={String(limits.maxFavorites)} />
+              <Text style={styles.sectionTitle}>{t('profile.sectionParams')}</Text>
+              <Row label={t('profile.maxParticipantsRow')} value={String(limits.maxParticipants)} />
+              <Row label={t('profile.maxRegistrationsRow')} value={String(limits.maxRegistrations)} />
+              <Row label={t('profile.maxFavoritesRow')} value={String(limits.maxFavorites)} />
               <Row
-                label="Événements actifs max"
+                label={t('profile.maxActiveEventsRow')}
                 value={limits.maxActiveEvents >= 999 ? '∞' : String(limits.maxActiveEvents)}
                 last
               />
@@ -345,23 +349,58 @@ export default function ProfileScreen() {
 
             <View style={styles.sectionCard}>
               <Text style={[styles.sectionTitle, !isPremium && { color: '#F87171' }]}>
-                {!isPremium ? 'Restrictions mode gratuit' : 'Contrôle des restrictions'}
+                {!isPremium
+                  ? t('profile.restrictionsFreeTitle')
+                  : t('profile.restrictionsControlTitle')}
               </Text>
-              {RESTRICTION_ROWS.map((row, i) => {
+              {RESTRICTION_ORDER.map((rowKey, i) => {
                 return (
                   <View
-                    key={row.key}
-                    style={[styles.restrictionRow, i < RESTRICTION_ROWS.length - 1 && styles.restrictionBorder]}>
+                    key={rowKey}
+                    style={[
+                      styles.restrictionRow,
+                      i < RESTRICTION_ORDER.length - 1 && styles.restrictionBorder,
+                    ]}>
                     <View style={{ flex: 1, paddingRight: 12 }}>
-                      <Text style={styles.restTitle}>{row.title}</Text>
-                      <Text style={styles.restSub}>{row.subtitle}</Text>
+                      <Text style={styles.restTitle}>
+                        {t(`profile.restrictions.${rowKey}.title` as const)}
+                      </Text>
+                      <Text style={styles.restSub}>
+                        {t(`profile.restrictions.${rowKey}.subtitle` as const)}
+                      </Text>
                     </View>
                     <Switch
-                      value={isPremium ? restrictions[row.key] : true}
-                      onValueChange={() => isPremium && toggleRestriction(row.key)}
+                      value={isPremium ? restrictions[rowKey] : true}
+                      onValueChange={() => {
+                        if (isPremium) toggleRestriction(rowKey);
+                      }}
                       disabled={!isPremium}
-                      trackColor={{ false: '#3A3A3C', true: '#EF4444' }}
-                      thumbColor="#fff"
+                      trackColor={
+                        !isPremium
+                          ? {
+                              false: SWITCH_RESTRICTION_DISABLED_TRACK,
+                              true: SWITCH_RESTRICTION_DISABLED_TRACK,
+                            }
+                          : restrictions[rowKey]
+                            ? {
+                                false: SWITCH_RESTRICTION_OFF_TRACK,
+                                true: SWITCH_RESTRICTION_ON_TRACK,
+                              }
+                            : {
+                                false: SWITCH_RESTRICTION_OFF_TRACK,
+                                true: SWITCH_RESTRICTION_OFF_TRACK,
+                              }
+                      }
+                      thumbColor={
+                        !isPremium || !restrictions[rowKey]
+                          ? SWITCH_RESTRICTION_THUMB_OFF_OR_DISABLED
+                          : SWITCH_RESTRICTION_THUMB_ON
+                      }
+                      ios_backgroundColor={
+                        !isPremium
+                          ? SWITCH_RESTRICTION_DISABLED_TRACK
+                          : SWITCH_RESTRICTION_OFF_TRACK
+                      }
                     />
                   </View>
                 );
@@ -370,9 +409,9 @@ export default function ProfileScreen() {
 
             <Pressable onPress={resetToCsvDefaults} style={styles.resetBtn}>
               <Ionicons name="refresh" size={18} color="#EF4444" />
-              <Text style={styles.resetTxt}>Réinitialiser les paramètres</Text>
+              <Text style={styles.resetTxt}>{t('profile.resetSettings')}</Text>
             </Pressable>
-            <Text style={styles.autoSave}>Les changements s’appliquent pour cette session (source CSV au reset).</Text>
+            <Text style={styles.autoSave}>{t('profile.sessionNote')}</Text>
           </View>
         )}
       </ScrollView>
@@ -432,11 +471,13 @@ function EventRow({
   onPress,
   heart,
   participated,
+  participatedLabel,
 }: {
   event: Event;
   onPress: () => void;
   heart?: boolean;
   participated?: boolean;
+  participatedLabel?: string;
 }) {
   return (
     <Pressable
@@ -454,8 +495,8 @@ function EventRow({
         <Text style={styles.eventTitle}>{event.title}</Text>
         <Text style={styles.eventMeta}>
           {event.dateLabel} • {event.timeShort}
-          {participated && (
-            <Text style={{ color: '#34D399' }}> • ✓ Participé</Text>
+          {participated && participatedLabel && (
+            <Text style={{ color: '#34D399' }}> • ✓ {participatedLabel}</Text>
           )}
         </Text>
       </View>
@@ -666,7 +707,41 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   fakeKnobOn: { alignSelf: 'flex-end' },
-  langRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  langCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  langTexts: {
+    flex: 1,
+    minWidth: 0,
+  },
+  langTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  langSub: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  langToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  langToggleLbl: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 14,
+    fontWeight: '600',
+    minWidth: 28,
+    textAlign: 'center',
+  },
+  langToggleLblActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
   globeBox: {
     width: 44,
     height: 44,

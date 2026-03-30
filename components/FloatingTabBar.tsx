@@ -12,15 +12,23 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Design } from '@/constants/design';
+import { useTranslation } from 'react-i18next';
+
+const TAB_I18N: Record<string, string> = {
+  index: 'nav.home',
+  chat: 'nav.chat',
+  events: 'nav.events',
+  profile: 'nav.profile',
+};
 
 const TAB_CONFIG: Record<
   string,
-  { label: string; icon: keyof typeof Ionicons.glyphMap; iconActive?: keyof typeof Ionicons.glyphMap }
+  { icon: keyof typeof Ionicons.glyphMap; iconActive?: keyof typeof Ionicons.glyphMap }
 > = {
-  index: { label: 'Home', icon: 'home-outline' },
-  chat: { label: 'Chat', icon: 'chatbubble-outline' },
-  events: { label: 'Event', icon: 'ticket-outline' },
-  profile: { label: 'Profil', icon: 'person-outline' },
+  index: { icon: 'home-outline' },
+  chat: { icon: 'chatbubble-outline' },
+  events: { icon: 'ticket-outline' },
+  profile: { icon: 'person-outline' },
 };
 
 /** Rebond proche du cubic-bezier(0.34, 1.56, 0.64, 1) du CSS nel */
@@ -56,11 +64,14 @@ function TabBarItem({
   descriptors: BottomTabBarProps['descriptors'];
   navigation: BottomTabBarProps['navigation'];
 }) {
+  const { t } = useTranslation();
   const { options } = descriptors[route.key];
-  const cfg = TAB_CONFIG[route.name] ?? {
-    label: options.title ?? route.name,
+  const baseCfg = TAB_CONFIG[route.name] ?? {
     icon: 'ellipse-outline' as keyof typeof Ionicons.glyphMap,
   };
+  const i18nKey = TAB_I18N[route.name];
+  const label = i18nKey ? t(i18nKey) : (options.title ?? route.name);
+  const cfg = { ...baseCfg, label };
 
   const scale = useSharedValue(isFocused ? 1.05 : 1);
 

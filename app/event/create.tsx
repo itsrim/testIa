@@ -224,7 +224,7 @@ export default function CreateEventScreen() {
               <Image source={{ uri: imageUri }} style={styles.photoPreview} contentFit="cover" />
             ) : (
               <>
-                <LinearGradient colors={['#5B2D8C', '#8E44AD']} style={styles.photoIconBg}>
+                <LinearGradient colors={['#5B2D8C', '#e1da1dff']} style={styles.photoIconBg}>
                   <Ionicons name="image-outline" size={28} color="#fff" />
                 </LinearGradient>
                 <Text style={styles.photoHint}>Ajouter une photo</Text>
@@ -371,7 +371,7 @@ export default function CreateEventScreen() {
             <Switch
               value={manualApproval}
               onValueChange={setManualApproval}
-              trackColor={{ false: '#3a3a3c', true: 'rgba(155, 93, 229, 0.45)' }}
+              trackColor={{ false: '#a024d9ff', true: 'rgba(222, 241, 14, 0.45)' }}
               thumbColor={manualApproval ? ACCENT : '#888'}
             />
           </View>
