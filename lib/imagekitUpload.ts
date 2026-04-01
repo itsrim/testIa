@@ -25,17 +25,52 @@ function sign(token: string, expire: number, privateKey: string): string {
   return CryptoJS.HmacSHA1(token + expire, privateKey).toString(CryptoJS.enc.Hex);
 }
 
+/** 20 octets en hex — évite `CryptoJS.lib.WordArray.random` (exige `crypto.getRandomValues`, souvent absent en RN). */
 function randomToken(): string {
-  return CryptoJS.lib.WordArray.random(20).toString(CryptoJS.enc.Hex);
+  const bytes = new Uint8Array(20);
+  try {
+    const c = globalThis.crypto;
+    if (c && typeof c.getRandomValues === 'function') {
+      c.getRandomValues(bytes);
+      return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch {
+    /* ex. navigateur / runtime sans RNG sécurisé */
+  }
+  for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 export type UploadImageKitOptions = {
   localUri: string;
   /** ex. image/jpeg */
   mimeType?: string | null;
+  /** @platform web — préférer ce `File` au `fetch(uri)` (souvent requis pour que l’upload fonctionne). */
+  webFile?: File | null;
   /** Identifiant compte (CSV `userKey`) — un fichier ImageKit par utilisateur. */
   userKey: string;
 };
+
+/** Secours si `mimeType` est absent (souvent sur mobile). */
+function inferMimeTypeFromUri(uri: string): string | null {
+  const u = uri.split('?')[0]?.toLowerCase() ?? '';
+  if (u.endsWith('.png')) return 'image/png';
+  if (u.endsWith('.webp')) return 'image/webp';
+  if (u.endsWith('.gif')) return 'image/gif';
+  if (u.endsWith('.heic') || u.endsWith('.heif')) return 'image/heic';
+  if (u.endsWith('.jpg') || u.endsWith('.jpeg')) return 'image/jpeg';
+  return null;
+}
+
+function resolveUploadMime(options: UploadImageKitOptions): string {
+  const fromPicker = options.mimeType?.trim();
+  if (fromPicker) return fromPicker;
+  const fromFile = options.webFile?.type?.trim();
+  if (fromFile) return fromFile;
+  const fromUri = inferMimeTypeFromUri(options.localUri);
+  if (fromUri) return fromUri;
+  return 'image/jpeg';
+}
 
 /**
  * Envoie un fichier local vers ImageKit (multipart **POST** — pas de PUT sur cet endpoint).
@@ -50,8 +85,8 @@ export async function uploadLocalImageToImageKit(
   const token = randomToken();
   const expire = Math.floor(Date.now() / 1000) + 900;
 
-  const mime = options.mimeType?.trim() || 'image/jpeg';
-  const fileName = imageKitProfileAvatarFileName(options.userKey);
+  const mime = resolveUploadMime(options);
+  const fileName = imageKitProfileAvatarFileName(options.userKey, mime);
 
   const form = new FormData();
   form.append('fileName', fileName);
@@ -66,9 +101,16 @@ export async function uploadLocalImageToImageKit(
   form.append('overwriteFile', 'true');
 
   if (Platform.OS === 'web') {
-    const res = await fetch(options.localUri);
-    const blob = await res.blob();
-    form.append('file', blob, fileName);
+    if (options.webFile instanceof File) {
+      form.append('file', options.webFile, fileName);
+    } else {
+      const res = await fetch(options.localUri);
+      if (!res.ok) {
+        throw new Error(`Impossible de lire l’image locale (${res.status}). Sur le web, passez asset.file depuis le picker.`);
+      }
+      const blob = await res.blob();
+      form.append('file', blob, fileName);
+    }
   } else {
     // React Native : objet { uri, type, name } (non standard pour le type FormData du DOM).
     form.append('file', { uri: options.localUri, type: mime, name: fileName } as never);

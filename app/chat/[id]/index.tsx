@@ -349,7 +349,11 @@ export default function ChatScreen() {
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
     const kind: MessageMediaAttachment['kind'] = asset.type === 'video' ? 'video' : 'image';
-    setPendingMedia({ uri: asset.uri, kind });
+    if (kind === 'image') {
+      setPendingMedia({ uri: asset.uri, kind: 'image' });
+    } else {
+      setPendingMedia({ uri: asset.uri, kind: 'video' });
+    }
   }, []);
 
   const onSend = () => {

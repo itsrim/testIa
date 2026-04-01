@@ -8,7 +8,12 @@ import { useProfileSettings, type RestrictionKey } from '@/context/ProfileSettin
 import { useMessaging } from '@/context/MessagingContext';
 import type { ProfileFriendRow, ProfileMeRow } from '@/data/mockDataLoader';
 import { uploadLocalImageToImageKit } from '@/lib/imagekitUpload';
-import { getUsersFriends, getUsersMe } from '@/services/dataApi';
+import {
+  getUsersFriends,
+  getUsersMe,
+  getUsersMeIdentity,
+  putUsersMeIdentity,
+} from '@/services/dataApi';
 import { todayDateKey } from '@/lib/todayDateKey';
 import type { Event } from '@/types/messaging';
 import { Image } from 'expo-image';
@@ -136,6 +141,8 @@ export default function ProfileScreen() {
   const [meCsv, setMeCsv] = useState<ProfileMeRow | null>(null);
   const [friendsCsv, setFriendsCsv] = useState<ProfileFriendRow[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  /** Incrémenté après upload : même URL ImageKit (overwrite) sinon l’image en cache ne se rafraîchit pas. */
+  const [avatarReloadNonce, setAvatarReloadNonce] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -209,10 +216,14 @@ export default function ProfileScreen() {
       const url = await uploadLocalImageToImageKit({
         localUri: asset.uri,
         mimeType: asset.mimeType ?? null,
+        webFile: Platform.OS === 'web' ? asset.file : undefined,
         userKey,
       });
+      const identity = await getUsersMeIdentity();
+      await putUsersMeIdentity({ ...identity, avatarUri: url });
       setAvatarUri(url);
       setMeCsv(await getUsersMe());
+      setAvatarReloadNonce((n) => n + 1);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert(t('profile.uploadErrorTitle'), msg || t('profile.uploadErrorBody'));
@@ -292,6 +303,7 @@ export default function ProfileScreen() {
         contentContainerStyle={{ paddingBottom: Design.contentBottomSpace + 24 }}>
         <View style={{ width: winW, height: heroH }}>
           <Image
+            key={`profile-hero-${avatarReloadNonce}`}
             source={{ uri: avatarUri }}
             style={StyleSheet.absoluteFillObject}
             contentFit="cover"

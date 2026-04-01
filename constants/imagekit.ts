@@ -6,11 +6,23 @@ export const IMAGEKIT_PUBLIC_KEY = 'public_P8SHxtLXEslKtUwWs7gR+MAjBx0=';
 
 export const IMAGEKIT_UPLOAD_FOLDER = '/profile-avatars';
 
+function avatarExtensionForMime(mime: string): string {
+  const m = mime.toLowerCase();
+  if (m.includes('png')) return 'png';
+  if (m.includes('webp')) return 'webp';
+  if (m.includes('gif')) return 'gif';
+  if (m.includes('heic') || m.includes('heif')) return 'heic';
+  return 'jpg';
+}
+
 /**
- * Nom de fichier par utilisateur : `{userKey}_avatar.jpg` — stable pour un même compte
- * (écrasement via `overwriteFile` dans `imagekitUpload.ts`).
+ * Nom de fichier par utilisateur : `{userKey}_avatar.{ext}` — stable pour un même compte
+ * (écrasement via `overwriteFile` dans `imagekitUpload.ts`). L’extension suit le MIME pour éviter
+ * un décalage type / contenu (ex. PNG envoyé en `image/jpeg`).
  */
-export function imageKitProfileAvatarFileName(userKey: string): string {
+export function imageKitProfileAvatarFileName(userKey: string, mimeType?: string | null): string {
   const safe = userKey.trim().replace(/[^a-zA-Z0-9_-]/g, '_') || 'user';
-  return `${safe}_avatar.jpg`;
+  const mime = (mimeType ?? '').trim() || 'image/jpeg';
+  const ext = avatarExtensionForMime(mime);
+  return `${safe}_avatar.${ext}`;
 }

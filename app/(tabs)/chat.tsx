@@ -500,7 +500,7 @@ export default function ChatListScreen() {
   );
 
   const suggestionColumns = useMemo(
-    () => buildMasonryColumns(visibleSuggestionProfiles, 3),
+    () => buildMasonryColumns(visibleSuggestionProfiles, 2),
     [visibleSuggestionProfiles],
   );
 

@@ -4,8 +4,8 @@ import { useMessaging } from '@/context/MessagingContext';
 import { todayDateKey } from '@/lib/todayDateKey';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -146,9 +146,10 @@ export default function CreateEventScreen() {
       aspect: [16, 9],
       quality: 0.85,
     });
-    if (!res.canceled && res.assets[0]?.uri) {
+    const raw = res.assets?.[0];
+    if (!res.canceled && raw?.uri) {
       void Haptics.selectionAsync();
-      setImageUri(res.assets[0].uri);
+      setImageUri(raw.uri);
     }
   }, []);
 

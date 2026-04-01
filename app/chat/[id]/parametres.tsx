@@ -186,20 +186,23 @@ export default function ParametresDiscussionGroupeScreen() {
     [fadeAnim, slideAnim],
   );
 
+  /** Après « Quitter la conversation » : retour liste Messages (dépile `parametres` + `chat/[id]`). */
   const navigateToChatTabAfterLeave = useCallback(() => {
     allowRemoveRef.current = true;
-    /** Liste Messages : `dismissTo` remonte la pile jusqu’à l’onglet chat (inclut la modale paramètres + l’écran `chat/[id]` racine). */
     router.dismissTo('/(tabs)/chat');
   }, [router]);
 
-  const close = useCallback(() => {
+  /** Fermeture du panneau : un seul `back` pour rester sur la discussion ouverte. */
+  const closeSettingsOnly = useCallback(() => {
     if (allowRemoveRef.current) {
-      navigateToChatTabAfterLeave();
+      router.back();
       return;
     }
     allowRemoveRef.current = true;
-    runExitAnimation(() => navigateToChatTabAfterLeave());
-  }, [runExitAnimation, navigateToChatTabAfterLeave]);
+    runExitAnimation(() => router.back());
+  }, [runExitAnimation, router]);
+
+  const close = closeSettingsOnly;
 
   useEffect(() => {
     if (!isValidScreen) return;
@@ -227,10 +230,10 @@ export default function ParametresDiscussionGroupeScreen() {
       if (allowRemoveRef.current) return;
       e.preventDefault();
       allowRemoveRef.current = true;
-      runExitAnimation(() => navigateToChatTabAfterLeave());
+      runExitAnimation(() => router.back());
     });
     return sub;
-  }, [navigation, isValidScreen, runExitAnimation, navigateToChatTabAfterLeave]);
+  }, [navigation, isValidScreen, runExitAnimation, router]);
 
   useEffect(() => {
     if (!isValidScreen) return;
