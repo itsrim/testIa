@@ -133,5 +133,5 @@ export async function uploadLocalImageToImageKit(
   if (!json.url || typeof json.url !== 'string') {
     throw new Error('Réponse ImageKit sans URL');
   }
-  return json.url;
+  return json.url.trim();
 }

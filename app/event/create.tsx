@@ -1,6 +1,7 @@
 import { Design } from '@/constants/design';
 import { useProfileSettings } from '@/context/ProfileSettingsContext';
 import { useMessaging } from '@/context/MessagingContext';
+import { prepareImageForUpload } from '@/lib/prepareImageForUpload';
 import { todayDateKey } from '@/lib/todayDateKey';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
@@ -149,7 +150,11 @@ export default function CreateEventScreen() {
     const raw = res.assets?.[0];
     if (!res.canceled && raw?.uri) {
       void Haptics.selectionAsync();
-      setImageUri(raw.uri);
+      const prepared = await prepareImageForUpload(raw.uri, {
+        width: raw.width,
+        height: raw.height,
+      }, { fallbackMimeType: raw.mimeType ?? null });
+      setImageUri(prepared.uri);
     }
   }, []);
 

@@ -20,6 +20,12 @@ export { PROFILE_BADGE_IDS, type ProfileBadgeId, type ProfileIdentityState };
 
 type ProfileIdentityContextValue = ProfileIdentityState & {
   setAvatarUri: (uri: string) => void;
+  /**
+   * Met à jour uniquement l’état React (sans AsyncStorage).
+   * À utiliser après un `await putUsersMeIdentity(...)` pour éviter un second `put` en `void`
+   * qui peut réécraser avec un état encore désynchronisé (surtout sur mobile).
+   */
+  applyIdentityState: (next: ProfileIdentityState) => void;
   setDisplayName: (v: string) => void;
   setBio: (v: string) => void;
   setAge: (v: string) => void;
@@ -53,6 +59,10 @@ export function ProfileIdentityProvider({ children }: { children: React.ReactNod
 
   const persist = useCallback((next: ProfileIdentityState) => {
     void putUsersMeIdentity(next);
+  }, []);
+
+  const applyIdentityState = useCallback((next: ProfileIdentityState) => {
+    setState(next);
   }, []);
 
   const setAvatarUri = useCallback(
@@ -122,6 +132,7 @@ export function ProfileIdentityProvider({ children }: { children: React.ReactNod
     () => ({
       ...state,
       setAvatarUri,
+      applyIdentityState,
       setDisplayName,
       setBio,
       setAge,
@@ -132,6 +143,7 @@ export function ProfileIdentityProvider({ children }: { children: React.ReactNod
     [
       state,
       setAvatarUri,
+      applyIdentityState,
       setDisplayName,
       setBio,
       setAge,

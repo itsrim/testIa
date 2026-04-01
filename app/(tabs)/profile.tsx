@@ -8,6 +8,8 @@ import { useProfileSettings, type RestrictionKey } from '@/context/ProfileSettin
 import { useMessaging } from '@/context/MessagingContext';
 import type { ProfileFriendRow, ProfileMeRow } from '@/data/mockDataLoader';
 import { uploadLocalImageToImageKit } from '@/lib/imagekitUpload';
+import { prepareImageForUpload } from '@/lib/prepareImageForUpload';
+import { withUrlUploadVersion } from '@/lib/versionRemoteAssetUrl';
 import {
   getUsersFriends,
   getUsersMe,
@@ -129,11 +131,12 @@ export default function ProfileScreen() {
     bio,
     age,
     badges,
-    setAvatarUri,
+    applyIdentityState,
     setDisplayName,
     setBio,
     setAge,
     toggleBadge,
+    hydrated: identityHydrated,
   } = useProfileIdentity();
 
   const [tab, setTab] = useState<TabId>('favorites');
@@ -156,6 +159,18 @@ export default function ProfileScreen() {
       alive = false;
     };
   }, []);
+
+  /** Après hydratation identité : réaligne `meCsv` (évite une course au 1er rendu profil / mobile). */
+  useEffect(() => {
+    if (!identityHydrated) return;
+    let alive = true;
+    void getUsersMe().then((me) => {
+      if (alive) setMeCsv(me);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [identityHydrated]);
 
   useEffect(() => {
     if (!isAdmin && tab === 'reports') setTab('favorites');
@@ -213,15 +228,21 @@ export default function ProfileScreen() {
 
     setUploadingPhoto(true);
     try {
+      const prepared = await prepareImageForUpload(asset.uri, {
+        width: asset.width,
+        height: asset.height,
+      }, { fallbackMimeType: asset.mimeType ?? null });
       const url = await uploadLocalImageToImageKit({
-        localUri: asset.uri,
-        mimeType: asset.mimeType ?? null,
-        webFile: Platform.OS === 'web' ? asset.file : undefined,
+        localUri: prepared.uri,
+        mimeType: prepared.mimeType,
         userKey,
       });
+      const avatarUriToStore = withUrlUploadVersion(url);
       const identity = await getUsersMeIdentity();
-      await putUsersMeIdentity({ ...identity, avatarUri: url });
-      setAvatarUri(url);
+      const next = { ...identity, avatarUri: avatarUriToStore };
+      await putUsersMeIdentity(next);
+      const fromStorage = await getUsersMeIdentity();
+      applyIdentityState(fromStorage);
       setMeCsv(await getUsersMe());
       setAvatarReloadNonce((n) => n + 1);
     } catch (e) {
@@ -304,6 +325,7 @@ export default function ProfileScreen() {
         <View style={{ width: winW, height: heroH }}>
           <Image
             key={`profile-hero-${avatarReloadNonce}`}
+            recyclingKey={`${avatarUri}-${avatarReloadNonce}`}
             source={{ uri: avatarUri }}
             style={StyleSheet.absoluteFillObject}
             contentFit="cover"

@@ -1,4 +1,5 @@
 import { Design } from '@/constants/design';
+import { prepareImageForUpload } from '@/lib/prepareImageForUpload';
 import { useMessaging } from '@/context/MessagingContext';
 import type { Conversation, Event, Message, MessageMediaAttachment } from '@/types/messaging';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -350,7 +351,11 @@ export default function ChatScreen() {
     const asset = result.assets[0];
     const kind: MessageMediaAttachment['kind'] = asset.type === 'video' ? 'video' : 'image';
     if (kind === 'image') {
-      setPendingMedia({ uri: asset.uri, kind: 'image' });
+      const prepared = await prepareImageForUpload(asset.uri, {
+        width: asset.width,
+        height: asset.height,
+      }, { fallbackMimeType: asset.mimeType ?? null });
+      setPendingMedia({ uri: prepared.uri, kind: 'image' });
     } else {
       setPendingMedia({ uri: asset.uri, kind: 'video' });
     }

@@ -170,9 +170,10 @@ async function mergeMeFromIdentityIfNeeded(base: ProfileMeRow): Promise<ProfileM
       typeof id.displayName === 'string' && id.displayName.trim()
         ? id.displayName.trim()
         : base.displayName;
+    const rawAv = typeof id.avatarUri === 'string' ? id.avatarUri.trim() : '';
     const avatarUrl =
-      typeof id.avatarUri === 'string' && id.avatarUri.startsWith('http')
-        ? id.avatarUri
+      rawAv && (rawAv.startsWith('http://') || rawAv.startsWith('https://'))
+        ? rawAv
         : base.avatarUrl;
     if (avatarUrl === base.avatarUrl && displayName === base.displayName) return base;
     return { ...base, userKey: base.userKey, displayName, avatarUrl };
@@ -184,9 +185,11 @@ async function mergeMeFromIdentityIfNeeded(base: ProfileMeRow): Promise<ProfileM
 async function persistCurrentUserCsvMirror(identity: ProfileIdentityState): Promise<void> {
   const base = profileMe;
   const displayName = identity.displayName.trim() || base.displayName;
-  const avatarUrl = identity.avatarUri.startsWith('http')
-    ? identity.avatarUri
-    : base.avatarUrl;
+  const rawAv = identity.avatarUri.trim();
+  const avatarUrl =
+    rawAv && (rawAv.startsWith('http://') || rawAv.startsWith('https://'))
+      ? rawAv
+      : base.avatarUrl;
   const row: ProfileMeRow = {
     ...base,
     displayName,
