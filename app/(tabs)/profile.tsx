@@ -3,6 +3,7 @@ import {
   PROFILE_BADGE_IDS,
   useProfileIdentity,
 } from '@/context/ProfileIdentityContext';
+import { useModeration } from '@/context/ModerationContext';
 import { useProfileSettings, type RestrictionKey } from '@/context/ProfileSettingsContext';
 import { useMessaging } from '@/context/MessagingContext';
 import type { ProfileFriendRow, ProfileMeRow } from '@/data/mockDataLoader';
@@ -13,7 +14,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -29,7 +30,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-type TabId = 'favorites' | 'friends' | 'history' | 'settings';
+type TabId = 'favorites' | 'friends' | 'history' | 'reports' | 'settings';
 
 const PINK = '#FF4B81';
 const PURPLE = '#8B5CF6';
@@ -54,10 +55,6 @@ const RESTRICTION_ORDER: RestrictionKey[] = [
   'disableSearch',
 ];
 
-function eventParticipated(e: Event): boolean {
-  return e.cardStatus === 'inscrit' || e.cardStatus === 'organisateur';
-}
-
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { width: winW, height: winH } = useWindowDimensions();
@@ -71,17 +68,34 @@ export default function ProfileScreen() {
     setLangEn(i18n.language.startsWith('en'));
   }, [i18n.language]);
 
-  const { events, cleanData } = useMessaging();
+  const { events, cleanData, getViewerCardStatus } = useMessaging();
+
+  const eventParticipated = useCallback(
+    (e: Event) => {
+      const s = getViewerCardStatus(e);
+      return s === 'inscrit' || s === 'organisateur';
+    },
+    [getViewerCardStatus],
+  );
   const {
     isPremium,
     togglePremium,
     isAdmin,
     toggleAdmin,
+    hideDailyQuestionnaire,
+    setHideDailyQuestionnaire,
     getLimits,
     restrictions,
     toggleRestriction,
     resetToCsvDefaults,
   } = useProfileSettings();
+
+  const {
+    reports,
+    hideProfileGlobally,
+    pendingReportsBadgeCount,
+    isProfileHidden,
+  } = useModeration();
 
   const {
     avatarUri,
@@ -112,6 +126,10 @@ export default function ProfileScreen() {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin && tab === 'reports') setTab('favorites');
+  }, [isAdmin, tab]);
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [draftAge, setDraftAge] = useState('');
@@ -189,14 +207,21 @@ export default function ProfileScreen() {
 
   const limits = getLimits();
 
+  const visibleFriends = useMemo(
+    () => friendsCsv.filter((f) => !isProfileHidden(f.profilId)),
+    [friendsCsv, isProfileHidden],
+  );
+
   const tabBadge = (id: TabId): number => {
     switch (id) {
       case 'favorites':
         return favoriteEvents.length;
       case 'friends':
-        return friendsCsv.length;
+        return visibleFriends.length;
       case 'history':
         return historyEvents.length;
+      case 'reports':
+        return pendingReportsBadgeCount;
       default:
         return 0;
     }
@@ -368,6 +393,17 @@ export default function ProfileScreen() {
             badgeColor={PURPLE}
             underlineColor={PURPLE}
           />
+          {isAdmin ? (
+            <TabBtn
+              label={t('profile.tabReports')}
+              icon="warning"
+              active={tab === 'reports'}
+              onPress={() => setTab('reports')}
+              badge={tabBadge('reports')}
+              badgeColor="#EF4444"
+              underlineColor="#EF4444"
+            />
+          ) : null}
           <TabBtn
             label={t('profile.tabPast')}
             icon="time"
@@ -401,7 +437,7 @@ export default function ProfileScreen() {
 
         {tab === 'friends' && (
           <View style={styles.listBlock}>
-            {friendsCsv.map((f) => (
+            {visibleFriends.map((f) => (
               <Pressable
                 key={f.profilId}
                 onPress={() => router.push(`/profil/${f.profilId}`)}
@@ -409,8 +445,14 @@ export default function ProfileScreen() {
                 <Image source={{ uri: f.imageUrl }} style={styles.friendAvatar} contentFit="cover" />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.friendName}>{f.name}</Text>
-                  <Text style={styles.friendSub}>
-                    {t('profile.commonEvents', { count: f.eventsInCommon })}
+                  <Text style={styles.friendSub} numberOfLines={2}>
+                    {[
+                      f.age != null ? `${f.age} ans` : null,
+                      f.city,
+                      t('profile.commonEvents', { count: f.eventsInCommon }),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </Text>
                 </View>
                 <LinearGradient colors={['#6B21A8', PURPLE]} style={styles.voirBtn}>
@@ -418,6 +460,69 @@ export default function ProfileScreen() {
                 </LinearGradient>
               </Pressable>
             ))}
+          </View>
+        )}
+
+        {tab === 'reports' && isAdmin && (
+          <View style={styles.listBlock}>
+            <Text style={styles.reportsIntro}>{t('profile.reportsIntro')}</Text>
+            {reports.length === 0 ? (
+              <EmptyHint icon="warning-outline" text={t('profile.reportsEmpty')} />
+            ) : (
+              reports.map((r) => {
+                const hidden = isProfileHidden(r.profileId);
+                const when = new Date(r.createdAt).toLocaleString(i18n.language.startsWith('en') ? 'en' : 'fr', {
+                  dateStyle: 'short',
+                  timeStyle: 'short',
+                });
+                return (
+                  <View key={r.id} style={styles.reportCard}>
+                    {r.imageUrl ? (
+                      <Image source={{ uri: r.imageUrl }} style={styles.reportAvatar} contentFit="cover" />
+                    ) : (
+                      <View style={[styles.reportAvatar, styles.reportAvatarPh]}>
+                        <Ionicons name="person" size={22} color={Design.textSecondary} />
+                      </View>
+                    )}
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.reportName} numberOfLines={1}>
+                        @{r.pseudo}
+                      </Text>
+                      <Text style={styles.reportMeta} numberOfLines={2}>
+                        id {r.profileId} · {when}
+                      </Text>
+                      {hidden ? (
+                        <Text style={styles.reportHiddenLbl}>{t('profile.reportsHiddenBadge')}</Text>
+                      ) : null}
+                    </View>
+                    <Pressable
+                      disabled={hidden}
+                      onPress={() =>
+                        Alert.alert(
+                          t('profile.reportsHideConfirmTitle'),
+                          t('profile.reportsHideConfirmBody'),
+                          [
+                            { text: t('profile.cancel'), style: 'cancel' },
+                            {
+                              text: t('profile.reportsHideConfirmOk'),
+                              style: 'destructive',
+                              onPress: () => hideProfileGlobally(r.profileId),
+                            },
+                          ],
+                        )
+                      }
+                      style={({ pressed }) => [
+                        styles.reportHideBtn,
+                        hidden && { opacity: 0.4 },
+                        pressed && !hidden && { opacity: 0.85 },
+                      ]}>
+                      <Ionicons name="eye-off-outline" size={18} color="#fff" />
+                      <Text style={styles.reportHideBtnTxt}>{t('profile.reportsHideCta')}</Text>
+                    </Pressable>
+                  </View>
+                );
+              })
+            )}
           </View>
         )}
 
@@ -531,6 +636,26 @@ export default function ProfileScreen() {
                   />
                   <Text style={[styles.langToggleLbl, langEn && styles.langToggleLblActive]}>EN</Text>
                 </View>
+              </View>
+            </View>
+
+            <View style={[styles.bigCard, { backgroundColor: CARD }]}>
+              <View style={[styles.bigCardInner, styles.langCardRow]}>
+                <View style={styles.globeBox}>
+                  <Ionicons name="clipboard-outline" size={24} color="#A78BFA" />
+                </View>
+                <View style={styles.langTexts}>
+                  <Text style={styles.langTitle}>{t('profile.questionnaireToggleTitle')}</Text>
+                  <Text style={styles.langSub}>{t('profile.questionnaireToggleSub')}</Text>
+                </View>
+                <Switch
+                  accessibilityLabel={t('profile.questionnaireToggleTitle')}
+                  value={hideDailyQuestionnaire}
+                  onValueChange={setHideDailyQuestionnaire}
+                  trackColor={{ false: '#3A3A3C', true: '#7C3AED' }}
+                  thumbColor="#FFFFFF"
+                  ios_backgroundColor="#3A3A3C"
+                />
               </View>
             </View>
 
@@ -977,6 +1102,66 @@ const styles = StyleSheet.create({
   },
   proPillTxt: { fontSize: 8, fontWeight: '900', color: '#000' },
   listBlock: { gap: 10 },
+  reportsIntro: {
+    color: Design.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 6,
+    paddingHorizontal: 2,
+  },
+  reportCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: CARD,
+    borderRadius: 14,
+    padding: 12,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  reportAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+  },
+  reportAvatarPh: {
+    backgroundColor: '#2C2C2E',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reportName: {
+    color: Design.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  reportMeta: {
+    color: Design.textSecondary,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  reportHiddenLbl: {
+    color: '#34D399',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 6,
+  },
+  reportHideBtn: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: '#B91C1C',
+    maxWidth: 104,
+  },
+  reportHideBtnTxt: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   eventCard: {
     flexDirection: 'row',
     alignItems: 'center',

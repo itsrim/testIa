@@ -1,19 +1,22 @@
-id,conversationId,title,dateLabel,timeShort,location,notes,createdOffsetMs,imageUri,priceLabel,participantCount,participantMax,cardStatus,isFavorite,dateKey,sectionDateLabel
-e1,c3,Yoga matinal,23 mars,07:00,Studio Zen,,100000,https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=600&q=80,12€,8,20,join,1,2026-03-23,Lundi 23 mars
-e2,c1,Lecture & café,23 mars,15:30,Librairie Pages,,150000,https://images.unsplash.com/photo-1524990029476-e1dbf922c866?w=600&q=80,Gratuit,14,25,inscrit,0,2026-03-23,Lundi 23 mars
-e3,c2,Running club,24 mars,07:30,Parc des Bastions,,200000,https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=600&q=80,Gratuit,18,30,join,1,2026-03-24,Mardi 24 mars
-e4,c4,Afterwork tacos,24 mars,19:00,Cantina 9,,250000,https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&q=80,18€,22,40,inscrit,1,2026-03-24,Mardi 24 mars
-e5,c4,Meetup UX,25 mars,18:30,Cowork Rivoli,,300000,https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=600&q=80,Gratuit,12,35,join,1,2026-03-25,Mercredi 25 mars
-e6,c2,Concert jazz,25 mars,21:00,Salle Pivoine,,350000,https://images.unsplash.com/photo-1415201364774-f6f0ee35f00f?w=600&q=80,25€,45,80,inscrit,0,2026-03-25,Mercredi 25 mars
-e7,c2,Cours de Peinture,26 mars,08:00,La Pachanga,,400000,https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=600&q=80,142€,126,200,inscrit,0,2026-03-26,Jeudi 26 mars
-e8,c3,Randonnée lac,26 mars,09:30,Parking téléphérique,,450000,https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80,Gratuit,24,40,organisateur,1,2026-03-26,Jeudi 26 mars
-e9,c3,Atelier DIY,26 mars,14:00,Atelier Paris,,500000,https://images.unsplash.com/photo-1452860606241-72869450a1da?w=600&q=80,Gratuit,10,15,inscrit,0,2026-03-26,Jeudi 26 mars
-e10,c2,Soirée Poker,26 mars,19:00,La Pachanga,,550000,https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=600&q=80,12€,14,20,join,1,2026-03-26,Jeudi 26 mars
-e11,c1,Méditation guidée,26 mars,20:30,Espace Calme,,600000,https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&q=80,15€,6,12,join,0,2026-03-26,Jeudi 26 mars
-e12,c4,Soirée jeux,26 mars,19:30,Chez Sam,Ramener un jeu,650000,https://images.unsplash.com/photo-1610890716171-6b1cae5779df?w=600&q=80,Gratuit,16,16,inscrit,0,2026-03-26,Jeudi 26 mars
-e13,c1,Brunch équipe,27 mars,11:00,Rue du Stand,,700000,https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&q=80,35€,8,12,join,0,2026-03-27,Vendredi 27 mars
-e14,c4,Apéro rooftop,27 mars,18:00,Terrasse Nord,,750000,https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&q=80,Gratuit,28,45,inscrit,0,2026-03-27,Vendredi 27 mars
-e15,c3,Marché créateurs,28 mars,10:00,Halle Centrale,,800000,https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&q=80,Gratuit,40,120,join,1,2026-03-28,Samedi 28 mars
-e16,c1,Atelier photo,28 mars,16:00,Galerie Lumière,,850000,https://images.unsplash.com/photo-1452587925148-ce544e77e70d?w=600&q=80,45€,12,18,inscrit,1,2026-03-28,Samedi 28 mars
-e17,c4,Trail matinal,29 mars,07:00,Départ Salève,,900000,https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80,Gratuit,9,25,organisateur,0,2026-03-29,Dimanche 29 mars
-e18,c2,Closing week-end,29 mars,18:00,Bar du Rhône,,950000,https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&q=80,10€,20,35,join,0,2026-03-29,Dimanche 29 mars
+id,conversationId,title,dateLabel,timeShort,location,notes,createdOffsetMs,imageUri,priceLabel,participantCount,participantMax,cardStatus,isFavorite,dateKey,sectionDateLabel,manualApproval
+e1,c4,Team Pastel — Lancement trimestre,2 févr.,09:30,Cowork Rivoli,Ordre du jour sur Notion.,100000,https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=600&q=80,Gratuit,10,16,join,0,2026-02-02,Lundi 2 février,
+e2,c2,Rando Dimanche — Le Salève,8 févr.,08:30,Col de la Croix,Prévoir crampons si verglas.,110000,https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80,Gratuit,14,22,inscrit,0,2026-02-08,Dimanche 8 février,
+e3,c3,Randonnée urbaine — Lumières d’hiver,15 févr.,18:30,Pont du Mont-Blanc,Chaussures confort.,120000,https://images.unsplash.com/photo-1514565131-fce0801e5785?w=600&q=80,Gratuit,16,28,inscrit,1,2026-02-15,Dimanche 15 février,
+e4,c1,Soirée jeux avec Maya,18 févr.,19:30,Chez Maya,Apportez un jeu court.,130000,https://images.unsplash.com/photo-1610890716171-6b1cae5779df?w=600&q=80,Gratuit,6,8,inscrit,0,2026-02-18,Mercredi 18 février,
+e5,c4,Team Pastel — Afterwork pizzas,23 févr.,19:00,Chef Luigi,Réservation au nom Pastel.,140000,https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&q=80,18€,12,20,inscrit,0,2026-02-23,Lundi 23 février,
+e6,c3,Randonnée urbaine — Marché & fromagers,28 févr.,11:00,Place de Plainpalais,On goûte ensemble.,150000,https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600&q=80,Gratuit,11,18,join,0,2026-02-28,Samedi 28 février,
+e7,c3,Randonnée urbaine — Carouge déjeuner,5 mars,12:30,Place du Marché,Terrasse si soleil.,160000,https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&q=80,22€,10,16,inscrit,0,2026-03-05,Jeudi 5 mars,
+e8,c2,Rando Dimanche — Jura (La Dôle),8 mars,07:45,Parking télép.Monts-de-Bière,Départ tôt.,170000,https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&q=80,12€,13,18,inscrit,0,2026-03-08,Dimanche 8 mars,
+e9,c4,Team Pastel — Workshop design system,12 mars,14:00,Studio Plainpalais,Figma + snacks.,180000,https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=600&q=80,Gratuit,9,14,join,0,2026-03-12,Jeudi 12 mars,
+e10,c2,Rando Dimanche — La Givrine,15 mars,08:00,Gare de Nyon,RDV 8h pile côté quai.,190000,https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80,Gratuit,15,22,inscrit,1,2026-03-15,Dimanche 15 mars,
+e11,c1,Brunch aux Bains avec Maya,20 mars,11:00,Bains des Pâquis,Réserver table 5.,200000,https://images.unsplash.com/photo-1528605248644-c14be25e6fb4?w=600&q=80,28€,2,4,inscrit,0,2026-03-20,Vendredi 20 mars,
+e12,c4,Team Pastel — Rétro mi-mars,22 mars,17:00,Bureaux + Livraison pizza,Points d’amélioration Q2.,210000,https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80,Gratuit,12,16,inscrit,0,2026-03-22,Dimanche 22 mars,
+e13,c3,Randonnée urbaine — Vieille-Ville & cafés,26 mars,15:00,Place du Molard,Pause café rue Perron.,220000,https://images.unsplash.com/photo-1514565131-fce0801e5785?w=600&q=80,Gratuit,13,22,inscrit,0,2026-03-26,Jeudi 26 mars,
+e14,c4,Team Pastel — Planning avril,29 mars,12:30,Salle réunion 3,Zoom pour Alex en remote.,230000,https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=600&q=80,Gratuit,7,12,join,0,2026-03-29,Dimanche 29 mars,
+e15,c2,Rando Dimanche — Voiron & Saint-Aupre,5 avr.,08:00,Gare Cornavin,RDV 8h — infos dans le fil.,240000,https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80,Gratuit,15,24,inscrit,1,2026-04-05,Dimanche 5 avril,
+e16,c3,Randonnée urbaine — Apéro rooftops,6 avr.,18:00,Quartier Charmettes,Mini-visite avant.,250000,https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&q=80,15€,10,18,join,0,2026-04-06,Lundi 6 avril,
+e17,c4,Team Pastel — Escape game,12 avr.,19:30,Enigm’Hom Genève,Équipes de 5 max.,260000,https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80,28€,4,10,organisateur,0,2026-04-12,Dimanche 12 avril,1
+e18,c1,Vernissage Expo Lumière,18 avr.,16:30,Galerie du Rhône,Invités +2.,270000,https://images.unsplash.com/photo-1452587925148-ce544e77e70d?w=600&q=80,Gratuit,3,6,join,0,2026-04-18,Samedi 18 avril,
+e19,c2,Rando Dimanche — Mont Tendre,26 avr.,07:30,Montricher Gare,Journée longue prévoir pic-nic.,280000,https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&q=80,Gratuit,11,16,join,0,2026-04-26,Dimanche 26 avril,
+e20,c4,Team Pastel — Clôture trimestre,28 avr.,18:30,Terrasse Nord + tapas,Debrief chill.,290000,https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=600&q=80,22€,14,22,inscrit,0,2026-04-28,Mardi 28 avril,
+e21,c2,Rando démo — Gestion inscrits & file d’attente,10 mai,08:00,Gare Cornavin,Tester validation et retraits depuis l’agenda.,295000,https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80,Gratuit,5,18,organisateur,0,2026-05-10,Dimanche 10 mai,1

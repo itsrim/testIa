@@ -20,6 +20,10 @@
  * | GET     | /settings/session                 | getSessionProfileSettings |
  * | PUT     | /settings/session                 | putSessionProfileSettings |
  * | DELETE  | /settings/session                 | deleteSessionProfileSettings |
+ * | GET     | /questionnaire/checkins-csv        | getQuestionnaireCheckinsCsv |
+ * | PUT     | /questionnaire/checkin             | appendQuestionnaireCheckin |
+ * | GET     | /questionnaire/last-seen          | getQuestionnaireLastSeenDate |
+ * | PUT     | /questionnaire/last-seen          | markQuestionnaireSeenForDate |
  * | GET     | /profile/visits                   | getProfileVisits |
  * | GET     | /suggestions/profiles             | getSuggestionProfiles |
  * | GET     | /messaging/seed                   | getMessagingSeed |
@@ -53,6 +57,11 @@ import type {
 } from '@/types/messaging';
 import { parseEventsCsvMirror, serializeEventsCsvMirror } from '@/lib/eventsCsvMirror';
 import {
+  appendLineToQuestionnaireCsv,
+  escapeCsvField,
+  QUESTIONNAIRE_CHECKINS_HEADER,
+} from '@/lib/questionnaireCsv';
+import {
   parseMessagingCsvMirror,
   serializeMessagingCsvMirror,
   type ParsedMessagingMirror,
@@ -67,12 +76,16 @@ const STORAGE_EVENTS_LEGACY_JSON = 'events_data';
 /** Événements : une chaîne CSV complète (même schéma que `events.csv` + colonnes miroir). */
 const STORAGE_EVENTS_CSV = '@testia_events_csv_v1';
 const STORAGE_SESSION_SETTINGS = '@testia_session_settings_v1';
+const STORAGE_QUESTIONNAIRE_LAST_SEEN = '@testia_questionnaire_last_seen_v1';
+const STORAGE_QUESTIONNAIRE_CSV = '@testia_questionnaire_csv_v1';
 /** Ancienne persistance messagerie JSON (migrée une fois vers CSV texte). */
 const STORAGE_MESSAGING_CHAT_LEGACY_JSON = '@testia_messaging_chat_v1';
 
 const STORAGE_CSV_CONVERSATIONS = '@testia_csv_conversations';
 const STORAGE_CSV_MESSAGES = '@testia_csv_messages';
 const STORAGE_CSV_GROUP_MEMBERS = '@testia_csv_group_members';
+/** Liste JSON des ids de conversations en favoris (bandeau « Conversations favoris »). */
+const STORAGE_FAVORITE_CONVERSATION_IDS = '@testia_favorite_conversation_ids_v1';
 /** Anciennes clés (miroir fichier + secours) — migrées une fois. */
 const LEGACY_MIRROR_CONV = '@testia_mirror_conversations_csv';
 const LEGACY_MIRROR_MSG = '@testia_mirror_messages_csv';
@@ -184,6 +197,8 @@ export type SessionProfileSettingsState = {
   isPremium: boolean;
   isAdmin: boolean;
   restrictions: Record<RestrictionKey, boolean>;
+  /** Si true : ne plus afficher automatiquement le questionnaire quotidien. */
+  hideDailyQuestionnaire: boolean;
 };
 
 /** GET /settings/limits — depuis CSV. */
@@ -202,7 +217,9 @@ export async function getSessionProfileSettings(): Promise<SessionProfileSetting
       p.restrictions && typeof p.restrictions === 'object'
         ? { ...DEFAULT_RESTRICTIONS, ...p.restrictions }
         : { ...DEFAULT_RESTRICTIONS };
-    return { isPremium: p.isPremium, isAdmin: p.isAdmin, restrictions };
+    const hideDailyQuestionnaire =
+      typeof p.hideDailyQuestionnaire === 'boolean' ? p.hideDailyQuestionnaire : false;
+    return { isPremium: p.isPremium, isAdmin: p.isAdmin, restrictions, hideDailyQuestionnaire };
   } catch {
     return null;
   }
@@ -224,8 +241,64 @@ export function seedSessionProfileSettingsFromCsv(): SessionProfileSettingsState
     isPremium: profileMe.isPremiumSeed,
     isAdmin: profileMe.isAdminSeed,
     restrictions: { ...DEFAULT_RESTRICTIONS },
+    hideDailyQuestionnaire: false,
   };
 }
+
+// --- Questionnaire quotidien (date « vue », CSV des réponses par jour) ---
+
+function localDateYMD(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Dernière date (YYYY-MM-DD) où l’utilisateur a vu ou terminé le questionnaire. */
+export async function getQuestionnaireLastSeenDate(): Promise<string | null> {
+  const v = await AsyncStorage.getItem(STORAGE_QUESTIONNAIRE_LAST_SEEN);
+  return v?.trim() || null;
+}
+
+export async function markQuestionnaireSeenForDate(isoDate: string = localDateYMD()): Promise<void> {
+  await AsyncStorage.setItem(STORAGE_QUESTIONNAIRE_LAST_SEEN, isoDate);
+}
+
+export type QuestionnaireCheckinRow = {
+  date: string;
+  emojiKey: string;
+  badgeId: string;
+  message: string;
+  q1Skipped: boolean;
+  q2Skipped: boolean;
+  q3Skipped: boolean;
+};
+
+/** Ajoute une ligne au CSV local (une entrée par complétion du flux étape 3). */
+export async function appendQuestionnaireCheckin(row: QuestionnaireCheckinRow): Promise<void> {
+  const prev = (await AsyncStorage.getItem(STORAGE_QUESTIONNAIRE_CSV)) ?? '';
+  const dataLine = [
+    row.date,
+    row.emojiKey,
+    row.badgeId,
+    escapeCsvField(row.message),
+    row.q1Skipped ? '1' : '0',
+    row.q2Skipped ? '1' : '0',
+    row.q3Skipped ? '1' : '0',
+  ].join(',');
+  const next = appendLineToQuestionnaireCsv(prev, dataLine);
+  await AsyncStorage.setItem(STORAGE_QUESTIONNAIRE_CSV, next);
+}
+
+/** CSV complet (avec en-tête), pour export ou graphiques. */
+export async function getQuestionnaireCheckinsCsv(): Promise<string> {
+  const raw = await AsyncStorage.getItem(STORAGE_QUESTIONNAIRE_CSV);
+  if (raw?.trim()) return raw.endsWith('\n') ? raw : `${raw}\n`;
+  return `${QUESTIONNAIRE_CHECKINS_HEADER}\n`;
+}
+
+export { localDateYMD as questionnaireLocalDateYMD };
+export { QUESTIONNAIRE_CHECKINS_HEADER };
 
 // --- Données lecture seule (CSV) ---
 
@@ -333,10 +406,30 @@ export async function deletePersistedMessagingChat(): Promise<void> {
     STORAGE_CSV_CONVERSATIONS,
     STORAGE_CSV_MESSAGES,
     STORAGE_CSV_GROUP_MEMBERS,
+    STORAGE_FAVORITE_CONVERSATION_IDS,
     LEGACY_MIRROR_CONV,
     LEGACY_MIRROR_MSG,
     LEGACY_MIRROR_MEM,
   ]);
+}
+
+/** Liste persistante des conversations favorites (`null` = jamais sauvegardé). */
+export async function getPersistedFavoriteConversationIds(): Promise<string[] | null> {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_FAVORITE_CONVERSATION_IDS);
+    if (raw === null) return null;
+    const p = JSON.parse(raw) as unknown;
+    if (!Array.isArray(p)) return null;
+    return p.filter((x): x is string => typeof x === 'string');
+  } catch {
+    return null;
+  }
+}
+
+export async function putPersistedFavoriteConversationIds(
+  ids: readonly string[],
+): Promise<void> {
+  await AsyncStorage.setItem(STORAGE_FAVORITE_CONVERSATION_IDS, JSON.stringify([...ids]));
 }
 
 // --- Événements : une chaîne CSV en AsyncStorage (même idée que `events.csv`) ---

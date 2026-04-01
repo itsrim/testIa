@@ -1,7 +1,8 @@
 import { Design } from '@/constants/design';
 import { useMessaging } from '@/context/MessagingContext';
+import { useModeration } from '@/context/ModerationContext';
 import type { MockProfileVisit } from '@/data/mockDataLoader';
-import { getProfileVisits, getSuggestionProfiles } from '@/services/dataApi';
+import { getProfileVisits, getSuggestionProfiles, getUsersFriends } from '@/services/dataApi';
 import { formatSuggestionCaption, type SuggestionProfile } from '@/data/suggestionProfiles';
 import { formatBadgeCount } from '@/lib/formatBadgeCount';
 import type { Conversation } from '@/types/messaging';
@@ -347,6 +348,11 @@ function VisitProfileRow({
     <View style={styles.visitCard}>
       <View style={styles.visitAvatarWrap}>
         <Image source={{ uri: item.avatarUrl }} style={styles.visitAvatar} contentFit="cover" />
+        {item.friendRequest ? (
+          <View style={styles.visitFriendRequestBadge}>
+            <Text style={styles.visitFriendRequestBadgeText}>Demande d’ami</Text>
+          </View>
+        ) : null}
         {mult != null ? (
           <View style={styles.visitMultBadge}>
             <Text style={styles.visitMultBadgeText}>×{mult}</Text>
@@ -359,7 +365,11 @@ function VisitProfileRow({
         </Text>
         <View style={styles.visitMetaRow}>
           <Ionicons name="eye-outline" size={14} color={Design.textSecondary} />
-          <Text style={styles.visitTime}>{formatVisitTimeAgo(item.lastVisitAt)}</Text>
+          <Text style={styles.visitTime}>
+            {item.friendRequest
+              ? `Visite ${formatVisitTimeAgo(item.lastVisitAt)} · en attente`
+              : formatVisitTimeAgo(item.lastVisitAt)}
+          </Text>
         </View>
       </View>
       <Pressable
@@ -382,15 +392,19 @@ function VisitProfileRow({
 function SuggestionMasonryCard({
   item,
   liked,
+  isFriend,
   onToggleLike,
   onOpenProfile,
 }: {
   item: SuggestionProfile;
   liked: boolean;
+  /** Profil déjà dans vos amis (cœur plein). */
+  isFriend: boolean;
   onToggleLike: () => void;
   onOpenProfile: () => void;
 }) {
   const caption = formatSuggestionCaption(item.pseudo, item.age);
+  const heartFilled = isFriend || liked;
 
   return (
     <View style={styles.suggestionCard}>
@@ -422,9 +436,19 @@ function SuggestionMasonryCard({
         }}
         style={({ pressed }) => [styles.suggestionHeartBtn, pressed && { opacity: 0.85 }]}
         hitSlop={10}
-        accessibilityLabel={liked ? 'Retirer le like' : 'Aimer'}
+        accessibilityLabel={
+          isFriend
+            ? 'Ami·e'
+            : heartFilled
+              ? 'Retirer le like'
+              : 'Aimer'
+        }
         accessibilityRole="button">
-        <Ionicons name={liked ? 'heart' : 'heart-outline'} size={22} color="#FFFFFF" />
+        <Ionicons
+          name={heartFilled ? 'heart' : 'heart-outline'}
+          size={22}
+          color={heartFilled ? '#FF4081' : '#FFFFFF'}
+        />
       </Pressable>
     </View>
   );
@@ -440,11 +464,13 @@ export default function ChatListScreen() {
     visitesTabBadgeCount,
     canViewGroupMessages,
   } = useMessaging();
+  const { isProfileHidden } = useModeration();
   const [sub, setSub] = useState<SubTab>('messages');
   const [visitLikedById, setVisitLikedById] = useState<Record<string, boolean>>({});
   const [suggestionLikedById, setSuggestionLikedById] = useState<Record<string, boolean>>({});
   const [profileVisits, setProfileVisits] = useState<MockProfileVisit[]>([]);
   const [suggestionProfiles, setSuggestionProfiles] = useState<SuggestionProfile[]>([]);
+  const [friendProfilIds, setFriendProfilIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     void getProfileVisits().then(setProfileVisits);
@@ -452,6 +478,12 @@ export default function ChatListScreen() {
 
   useEffect(() => {
     void getSuggestionProfiles().then(setSuggestionProfiles);
+  }, []);
+
+  useEffect(() => {
+    void getUsersFriends().then((rows) => {
+      setFriendProfilIds(new Set(rows.map((r) => r.profilId)));
+    });
   }, []);
 
   const toggleVisitLike = useCallback((id: string) => {
@@ -462,10 +494,30 @@ export default function ChatListScreen() {
     setSuggestionLikedById((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
-  const suggestionColumns = useMemo(
-    () => buildMasonryColumns(suggestionProfiles, 3),
-    [suggestionProfiles],
+  const visibleSuggestionProfiles = useMemo(
+    () => suggestionProfiles.filter((p) => !isProfileHidden(p.id)),
+    [suggestionProfiles, isProfileHidden],
   );
+
+  const suggestionColumns = useMemo(
+    () => buildMasonryColumns(visibleSuggestionProfiles, 3),
+    [visibleSuggestionProfiles],
+  );
+
+  const sortedProfileVisits = useMemo(() => {
+    return [...profileVisits].sort((a, b) => {
+      const ra = a.friendRequest ? 1 : 0;
+      const rb = b.friendRequest ? 1 : 0;
+      if (rb !== ra) return rb - ra;
+      return b.lastVisitAt - a.lastVisitAt;
+    });
+  }, [profileVisits]);
+
+  const visitesSubTabBadge = useMemo(() => {
+    const pending = profileVisits.filter((v) => v.friendRequest).length;
+    if (pending > 0) return visitesTabBadgeCount + pending;
+    return visitesTabBadgeCount;
+  }, [profileVisits, visitesTabBadgeCount]);
 
   const sorted = useMemo(
     () => [...conversations].sort((a, b) => b.updatedAt - a.updatedAt),
@@ -543,7 +595,7 @@ export default function ChatListScreen() {
             label="Visites"
             active={sub === 'visites'}
             onPress={() => setSub('visites')}
-            badge={visitesTabBadgeCount}
+            badge={visitesSubTabBadge}
             badgeVariant="gold"
             icon="eye-outline"
             activeUnderline="gold"
@@ -577,7 +629,7 @@ export default function ChatListScreen() {
         />
       ) : sub === 'visites' ? (
         <FlatList
-          data={profileVisits}
+          data={sortedProfileVisits}
           keyExtractor={(v) => v.id}
           style={styles.list}
           showsVerticalScrollIndicator={false}
@@ -614,6 +666,7 @@ export default function ChatListScreen() {
                     <SuggestionMasonryCard
                       item={item}
                       liked={!!suggestionLikedById[item.id]}
+                      isFriend={friendProfilIds.has(item.id)}
                       onToggleLike={() => toggleSuggestionLike(item.id)}
                       onOpenProfile={() => router.push(`/profil/${item.id}`)}
                     />
@@ -1044,6 +1097,24 @@ const styles = StyleSheet.create({
     height: 58,
     borderRadius: 29,
     backgroundColor: '#1c1c1e',
+  },
+  visitFriendRequestBadge: {
+    position: 'absolute',
+    left: -4,
+    top: -4,
+    maxWidth: 92,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: '#FF4081',
+    borderWidth: 2,
+    borderColor: VISIT_CARD_BG,
+  },
+  visitFriendRequestBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   visitMultBadge: {
     position: 'absolute',

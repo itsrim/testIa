@@ -26,6 +26,9 @@ type ProfileSettingsValue = {
   isAdmin: boolean;
   setAdmin: (v: boolean) => void;
   toggleAdmin: () => void;
+  hideDailyQuestionnaire: boolean;
+  setHideDailyQuestionnaire: (v: boolean) => void;
+  toggleHideDailyQuestionnaire: () => void;
   getLimits: () => TierLimits;
   isRestricted: (key: RestrictionKey) => boolean;
   restrictions: Record<RestrictionKey, boolean>;
@@ -40,6 +43,7 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
   const seed = useMemo(() => seedSessionProfileSettingsFromCsv(), []);
   const [isPremium, setPremium] = useState(seed.isPremium);
   const [isAdmin, setAdmin] = useState(seed.isAdmin);
+  const [hideDailyQuestionnaire, setHideDailyQuestionnaire] = useState(seed.hideDailyQuestionnaire);
   const [restrictions, setRestrictions] = useState<Record<RestrictionKey, boolean>>({
     ...seed.restrictions,
   });
@@ -54,6 +58,7 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
         if (stored) {
           setPremium(stored.isPremium);
           setAdmin(stored.isAdmin);
+          setHideDailyQuestionnaire(stored.hideDailyQuestionnaire);
           setRestrictions(stored.restrictions);
         }
       } finally {
@@ -67,9 +72,14 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (!settingsHydrated) return;
-    const payload: SessionProfileSettingsState = { isPremium, isAdmin, restrictions };
+    const payload: SessionProfileSettingsState = {
+      isPremium,
+      isAdmin,
+      restrictions,
+      hideDailyQuestionnaire,
+    };
     void putSessionProfileSettings(payload);
-  }, [isPremium, isAdmin, restrictions, settingsHydrated]);
+  }, [isPremium, isAdmin, restrictions, hideDailyQuestionnaire, settingsHydrated]);
 
   const getLimits = useCallback((): TierLimits => {
     return isPremium ? limitsByTier.premium : limitsByTier.free;
@@ -86,6 +96,11 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
   const togglePremium = useCallback(() => setPremium((p) => !p), []);
   const toggleAdmin = useCallback(() => setAdmin((p) => !p), []);
 
+  const toggleHideDailyQuestionnaire = useCallback(
+    () => setHideDailyQuestionnaire((h) => !h),
+    [],
+  );
+
   const toggleRestriction = useCallback((key: RestrictionKey) => {
     setRestrictions((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
@@ -94,6 +109,7 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
     const n = seedSessionProfileSettingsFromCsv();
     setPremium(n.isPremium);
     setAdmin(n.isAdmin);
+    setHideDailyQuestionnaire(n.hideDailyQuestionnaire);
     setRestrictions(n.restrictions);
     void deleteSessionProfileSettings();
   }, []);
@@ -106,6 +122,9 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
       isAdmin,
       setAdmin,
       toggleAdmin,
+      hideDailyQuestionnaire,
+      setHideDailyQuestionnaire,
+      toggleHideDailyQuestionnaire,
       getLimits,
       isRestricted,
       restrictions,
@@ -118,6 +137,8 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
       togglePremium,
       isAdmin,
       toggleAdmin,
+      hideDailyQuestionnaire,
+      toggleHideDailyQuestionnaire,
       getLimits,
       isRestricted,
       restrictions,

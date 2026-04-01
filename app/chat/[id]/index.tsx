@@ -1,6 +1,6 @@
 import { Design } from '@/constants/design';
 import { useMessaging } from '@/context/MessagingContext';
-import type { Conversation, Message, MessageMediaAttachment } from '@/types/messaging';
+import type { Conversation, Event, Message, MessageMediaAttachment } from '@/types/messaging';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Video, ResizeMode } from 'expo-av';
@@ -8,7 +8,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -27,7 +27,60 @@ function formatMessageClock(ts: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-function HeaderAvatar({ conversation }: { conversation: Conversation }) {
+/** Mots du titre de discussion présents dans le titre de sortie (évite « Voir » sur une sortie hors sujet). */
+function titleWordAffinityScore(conversationTitle: string, eventTitle: string): number {
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9À-ÿ\s]/gi, ' ');
+  const words = norm(conversationTitle)
+    .split(/\s+/)
+    .filter((w) => w.length >= 3);
+  if (words.length === 0) return 0;
+  const blob = norm(eventTitle);
+  let n = 0;
+  for (const w of words) {
+    if (blob.includes(w)) n += 1;
+  }
+  return n;
+}
+
+function pickEventForChatHeader(conversation: Conversation | undefined, list: Event[]): Event | undefined {
+  if (list.length === 0) return undefined;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const convTitle = conversation?.title ?? '';
+
+  const scored = list.map((e) => ({
+    e,
+    affinity: convTitle ? titleWordAffinityScore(convTitle, e.title) : 0,
+  }));
+  const bestAffinity = Math.max(...scored.map((s) => s.affinity));
+  const pool = bestAffinity > 0 ? scored.filter((s) => s.affinity === bestAffinity).map((s) => s.e) : list;
+
+  const upcoming = pool.filter((e) => e.dateKey >= todayKey).sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+  if (upcoming.length > 0) return upcoming[0];
+
+  const past = pool.filter((e) => e.dateKey < todayKey).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+  if (past.length > 0) return past[0];
+
+  return list[0];
+}
+
+function HeaderAvatar({
+  conversation,
+  thumbnailUri,
+}: {
+  conversation: Conversation;
+  /** Photo de couverture de la sortie lorsque le fil est ouvert depuis une fiche événement. */
+  thumbnailUri?: string;
+}) {
+  if (thumbnailUri) {
+    return (
+      <Image source={{ uri: thumbnailUri }} style={styles.headerAvatar} contentFit="cover" />
+    );
+  }
   const isGroup = conversation.type === 'group';
   if (isGroup) {
     return (
@@ -105,14 +158,22 @@ function MessageBubble({
 }
 
 export default function ChatScreen() {
-  const { id: rawId } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId, eventId: rawEventId } = useLocalSearchParams<{
+    id: string;
+    eventId?: string;
+  }>();
   const id = Array.isArray(rawId) ? rawId[0] : rawId;
+  const eventId = Array.isArray(rawEventId) ? rawEventId[0] : rawEventId;
   const navigation = useNavigation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const {
     getConversation,
+    getEventById,
+    eventsForConversation,
+    favoriteConversationIds,
+    toggleConversationFavorite,
     messagesByConversation,
     sendMessage,
     markConversationRead,
@@ -120,6 +181,34 @@ export default function ChatScreen() {
   } = useMessaging();
   const conversation = id ? getConversation(id) : undefined;
   const messages = id ? messagesByConversation[id] ?? [] : [];
+
+  const linkedEvent = useMemo(() => {
+    if (!eventId || !id) return undefined;
+    const ev = getEventById(eventId);
+    if (!ev || ev.conversationId !== id) return undefined;
+    return ev;
+  }, [eventId, id, getEventById]);
+
+  /** Sortie à ouvrir avec « Voir » : deeplink, sinon affinité titre + date (à venir, sinon dernière cohérente). */
+  const eventForHeaderCta = useMemo(() => {
+    if (!id) return undefined;
+    if (linkedEvent) return linkedEvent;
+    const list = eventsForConversation(id);
+    return pickEventForChatHeader(conversation, list);
+  }, [id, linkedEvent, eventsForConversation, conversation]);
+
+  const headerTitle = linkedEvent?.title ?? conversation?.title ?? '';
+  const headerSubtitle = useMemo(() => {
+    if (!conversation) return '';
+    if (linkedEvent) {
+      return `Sortie · ${linkedEvent.participantCount}/${linkedEvent.participantMax} inscrits · groupe`;
+    }
+    return conversation.type === 'group'
+      ? `${conversation.memberCount ?? 3} membres`
+      : 'Message direct';
+  }, [conversation, linkedEvent]);
+
+  const isConversationFavorite = Boolean(id && favoriteConversationIds.includes(id));
 
   const [draft, setDraft] = useState('');
   const [pendingMedia, setPendingMedia] = useState<MessageMediaAttachment | null>(null);
@@ -134,18 +223,14 @@ export default function ChatScreen() {
   useLayoutEffect(() => {
     if (!conversation) return;
 
-    const subtitle =
-      conversation.type === 'group'
-        ? `${conversation.memberCount ?? 3} membres`
-        : 'Message direct';
-
     navigation.setOptions({
       headerStyle: {
         backgroundColor: '#0a0a0a',
       },
       headerShadowVisible: false,
       headerTintColor: Design.textPrimary,
-      headerTitleAlign: 'center',
+      /** Gauche : titre collé après le chevron (évite le « trou » au centre sur web / Android). */
+      headerTitleAlign: 'left',
       /* Stack imbriqué : pas d’écran « précédent » dans ce stack → iOS masquait le retour. */
       headerLeft: () => (
         <Pressable
@@ -159,13 +244,16 @@ export default function ChatScreen() {
       ),
       headerTitle: () => (
         <View style={styles.headerTitleRow}>
-          <HeaderAvatar conversation={conversation} />
+          <HeaderAvatar
+            conversation={conversation}
+            thumbnailUri={linkedEvent?.imageUri}
+          />
           <View style={styles.headerTexts}>
             <Text style={styles.headerName} numberOfLines={1}>
-              {conversation.title}
+              {headerTitle}
             </Text>
-            <Text style={styles.headerSubtitle} numberOfLines={1}>
-              {subtitle}
+            <Text style={styles.headerSubtitle} numberOfLines={2}>
+              {headerSubtitle}
             </Text>
           </View>
         </View>
@@ -174,19 +262,51 @@ export default function ChatScreen() {
         id ? (
           <View style={styles.headerRightRow}>
             <Pressable
+              onPress={() => toggleConversationFavorite(id)}
+              hitSlop={10}
+              style={styles.headerIconBtn}
+              accessibilityLabel={
+                isConversationFavorite ? 'Retirer la discussion des favoris' : 'Mettre la discussion en favoris'
+              }
+              accessibilityRole="button"
+              accessibilityState={{ selected: isConversationFavorite }}>
+              <Ionicons
+                name={isConversationFavorite ? 'heart' : 'heart-outline'}
+                size={24}
+                color={isConversationFavorite ? '#FF4081' : Design.textPrimary}
+              />
+            </Pressable>
+            <Pressable
               onPress={() =>
-                router.push({
-                  pathname: '/event/new',
-                  params: { conversationId: id },
-                })
+                eventForHeaderCta
+                  ? router.push(`/event/${eventForHeaderCta.id}`)
+                  : router.push({
+                      pathname: '/event/create',
+                      params: {
+                        conversationId: id,
+                        title: conversation?.title ?? '',
+                      },
+                    })
               }
               hitSlop={8}
               style={styles.headerEventBtn}
-              accessibilityLabel="Create a new event"
+              accessibilityLabel={
+                eventForHeaderCta ? 'Voir le détail de la sortie' : 'Créer une sortie depuis cette discussion'
+              }
               accessibilityRole="button"
-              accessibilityHint="Opens the form to propose an event in this chat">
-              <Ionicons name="calendar-outline" size={18} color="#FF4B6E" />
-              <Text style={styles.headerEventLabel}>+ Event</Text>
+              accessibilityHint={
+                eventForHeaderCta
+                  ? 'Ouvre la fiche de la sortie liée à cette discussion'
+                  : 'Ouvre le formulaire pour proposer une sortie dans ce fil'
+              }>
+              <Ionicons
+                name={eventForHeaderCta ? 'eye-outline' : 'calendar-outline'}
+                size={18}
+                color="#FF4B6E"
+              />
+              <Text style={styles.headerEventLabel}>
+                {eventForHeaderCta ? 'Voir' : 'Créer'}
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => router.push(`/chat/${id}/parametres`)}
@@ -198,7 +318,18 @@ export default function ChatScreen() {
           </View>
         ) : null,
     });
-  }, [conversation, navigation, id, router]);
+  }, [
+    conversation,
+    navigation,
+    id,
+    router,
+    linkedEvent,
+    headerTitle,
+    headerSubtitle,
+    isConversationFavorite,
+    toggleConversationFavorite,
+    eventForHeaderCta,
+  ]);
 
   const pickFromLibrary = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -404,7 +535,8 @@ const styles = StyleSheet.create({
   headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    maxWidth: 220,
+    flex: 1,
+    minWidth: 0,
   },
   headerAvatar: {
     width: 38,

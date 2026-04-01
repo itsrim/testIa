@@ -120,6 +120,7 @@ function parseEvents(anchor: number): Event[] {
     };
     const notes = r.notes?.trim();
     if (notes) s.notes = notes;
+    if (r.manualApproval === '1') s.manualApproval = true;
     return s;
   });
 }
@@ -142,6 +143,8 @@ export type MockProfileVisit = {
   avatarUrl: string;
   lastVisitAt: number;
   visitMultiplier?: number;
+  /** Visiteur qui a aussi envoyé une demande d’ami — badge dans l’onglet Visites. */
+  friendRequest?: boolean;
 };
 
 function parseProfileVisits(anchor: number): MockProfileVisit[] {
@@ -156,6 +159,10 @@ function parseProfileVisits(anchor: number): MockProfileVisit[] {
     const mult = r.visitMultiplier?.trim();
     if (mult !== undefined && mult !== '') {
       v.visitMultiplier = csvNum(mult, 1);
+    }
+    const fr = r.friendRequest?.trim();
+    if (fr !== undefined && fr !== '' && csvBool(fr)) {
+      v.friendRequest = true;
     }
     return v;
   });
@@ -175,6 +182,9 @@ export type ProfileFriendRow = {
   name: string;
   imageUrl: string;
   eventsInCommon: number;
+  /** Aligné sur `suggestion_profiles` lorsque le CSV amis les contient. */
+  age?: number;
+  city?: string;
 };
 
 export type TierLimits = {
@@ -212,6 +222,8 @@ function parseProfileFriends(): ProfileFriendRow[] {
     name: r.name,
     imageUrl: r.imageUrl,
     eventsInCommon: csvNum(r.eventsInCommon),
+    age: r.age != null && String(r.age).trim() !== '' ? csvNum(r.age) : undefined,
+    city: r.city?.trim() || undefined,
   }));
 }
 
@@ -252,6 +264,7 @@ function parseSuggestionProfiles(): SuggestionProfile[] {
     verified: csvBool(r.verified),
     bio: r.bio,
     memberSince: r.memberSince,
+    city: (r.city ?? '').trim(),
     stats: {
       reliability: csvNum(r.reliability, 4),
       events: csvNum(r.events),

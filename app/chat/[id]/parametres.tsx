@@ -186,14 +186,20 @@ export default function ParametresDiscussionGroupeScreen() {
     [fadeAnim, slideAnim],
   );
 
+  const navigateToChatTabAfterLeave = useCallback(() => {
+    allowRemoveRef.current = true;
+    /** Liste Messages : `dismissTo` remonte la pile jusqu’à l’onglet chat (inclut la modale paramètres + l’écran `chat/[id]` racine). */
+    router.dismissTo('/(tabs)/chat');
+  }, [router]);
+
   const close = useCallback(() => {
     if (allowRemoveRef.current) {
-      router.back();
+      navigateToChatTabAfterLeave();
       return;
     }
     allowRemoveRef.current = true;
-    runExitAnimation(() => router.back());
-  }, [router, runExitAnimation]);
+    runExitAnimation(() => navigateToChatTabAfterLeave());
+  }, [runExitAnimation, navigateToChatTabAfterLeave]);
 
   useEffect(() => {
     if (!isValidScreen) return;
@@ -221,12 +227,10 @@ export default function ParametresDiscussionGroupeScreen() {
       if (allowRemoveRef.current) return;
       e.preventDefault();
       allowRemoveRef.current = true;
-      runExitAnimation(() => {
-        navigation.dispatch(e.data.action);
-      });
+      runExitAnimation(() => navigateToChatTabAfterLeave());
     });
     return sub;
-  }, [navigation, isValidScreen, runExitAnimation]);
+  }, [navigation, isValidScreen, runExitAnimation, navigateToChatTabAfterLeave]);
 
   useEffect(() => {
     if (!isValidScreen) return;
@@ -241,21 +245,21 @@ export default function ParametresDiscussionGroupeScreen() {
   const onLeave = () => {
     if (!conversationId || !conversation) return;
     const title = isGroup ? 'Quitter le groupe' : 'Quitter la conversation';
-    Alert.alert(
-      title,
-      'Vous ne recevrez plus les messages de cette discussion.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Sortir',
-          style: 'destructive',
-          onPress: () => {
-            leaveGroup(conversationId);
-            router.replace('/(tabs)/chat');
-          },
-        },
-      ],
-    );
+    const message = 'Vous ne recevrez plus les messages de cette discussion.';
+    const run = () => {
+      navigateToChatTabAfterLeave();
+      leaveGroup(conversationId);
+    };
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${message}`)) {
+        run();
+      }
+      return;
+    }
+    Alert.alert(title, message, [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Sortir', style: 'destructive', onPress: run },
+    ]);
   };
 
   const onRemoveMember = (member: GroupMember) => {

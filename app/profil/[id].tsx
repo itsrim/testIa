@@ -1,15 +1,22 @@
 import { Design } from '@/constants/design';
+import { useMessaging } from '@/context/MessagingContext';
+import { useModeration } from '@/context/ModerationContext';
 import {
   buildMemberFallbackProfile,
+  capPseudo,
   formatSuggestionCaption,
   getSuggestionProfile,
   type SuggestionProfile,
 } from '@/data/suggestionProfiles';
-import { Image } from 'expo-image';
+import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
+  Alert,
+  Image as RNImage,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -25,6 +32,7 @@ const STAT_BLUE = '#42A5F5';
 const PRIMARY_BTN = '#2196F3';
 const CARD = '#1A1A1A';
 const RED_OUTLINE = '#FF3B30';
+const DANGER_MODAL = '#FF453A';
 
 function paramStr(v: string | string[] | undefined): string | undefined {
   if (v == null) return undefined;
@@ -70,6 +78,10 @@ export default function SuggestionProfilScreen() {
   const seed = paramStr(raw.seed as string | string[] | undefined);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+  const { ensureDirectConversationForProfile } = useMessaging();
+  const { isProfileHidden, submitReport } = useModeration();
+  const [reportModalVisible, setReportModalVisible] = useState(false);
 
   const profile = useMemo(
     () =>
@@ -94,7 +106,33 @@ export default function SuggestionProfilScreen() {
     );
   }
 
+  if (isProfileHidden(profile.id)) {
+    return (
+      <View style={[styles.fallback, { paddingTop: insets.top + 24 }]}>
+        <Text style={styles.fallbackText}>{t('moderation.profileUnavailableTitle')}</Text>
+        <Text style={[styles.fallbackText, { opacity: 0.85, fontSize: 14 }]}>
+          {t('moderation.profileUnavailableBody')}
+        </Text>
+        <Pressable onPress={() => router.back()} style={styles.fallbackBtn}>
+          <Text style={styles.fallbackBtnText}>Retour</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   const title = formatSuggestionCaption(profile.pseudo, profile.age);
+
+  const onReportPress = () => setReportModalVisible(true);
+
+  const confirmSubmitReport = () => {
+    submitReport({
+      profileId: profile.id,
+      pseudo: profile.pseudo,
+      imageUrl: profile.imageUrl,
+    });
+    setReportModalVisible(false);
+    Alert.alert(t('moderation.reportSentTitle'), t('moderation.reportSentBody'));
+  };
 
   return (
     <View style={styles.root}>
@@ -103,15 +141,26 @@ export default function SuggestionProfilScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}>
         <View style={styles.heroWrap}>
-          <Image
-            source={{ uri: profile.imageUrl }}
-            style={styles.heroImage}
-            contentFit="cover"
-          />
+          {Platform.OS === 'web' ? (
+            <RNImage
+              source={{ uri: profile.imageUrl }}
+              style={styles.heroImage}
+              resizeMode="cover"
+              accessibilityLabel=""
+            />
+          ) : (
+            <ExpoImage
+              source={{ uri: profile.imageUrl }}
+              style={styles.heroImage}
+              contentFit="cover"
+              priority="high"
+            />
+          )}
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.92)']}
             locations={[0.35, 0.65, 1]}
-            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+            style={styles.heroGradient}
           />
           <Pressable
             onPress={() => router.back()}
@@ -119,6 +168,14 @@ export default function SuggestionProfilScreen() {
             hitSlop={12}
             accessibilityLabel="Retour">
             <Ionicons name="chevron-back" size={28} color="#fff" />
+          </Pressable>
+          <Pressable
+            onPress={onReportPress}
+            style={[styles.reportBtn, { top: insets.top + 8 }]}
+            hitSlop={12}
+            accessibilityLabel={t('moderation.reportAccessibility')}
+            accessibilityRole="button">
+            <Ionicons name="warning" size={26} color="#FFCC00" />
           </Pressable>
           <View style={[styles.heroTextBlock, { paddingBottom: 20 }]}>
             <Text style={styles.heroTitle}>{title}</Text>
@@ -135,6 +192,12 @@ export default function SuggestionProfilScreen() {
           <View style={styles.bioCard}>
             <Text style={styles.bioText}>{profile.bio}</Text>
             <View style={styles.bioRule} />
+            {profile.city ? (
+              <View style={styles.memberRow}>
+                <Ionicons name="location-outline" size={18} color={Design.textSecondary} />
+                <Text style={styles.memberText}>{profile.city}</Text>
+              </View>
+            ) : null}
             <View style={styles.memberRow}>
               <Ionicons name="calendar-outline" size={18} color={Design.textSecondary} />
               <Text style={styles.memberText}>Membre depuis {profile.memberSince}</Text>
@@ -167,6 +230,13 @@ export default function SuggestionProfilScreen() {
           </View>
 
           <Pressable
+            onPress={() => {
+              const convId = ensureDirectConversationForProfile({
+                profilId: profile.id,
+                displayTitle: capPseudo(profile.pseudo),
+              });
+              if (convId) router.push(`/chat/${convId}`);
+            }}
             style={({ pressed }) => [styles.btnMessage, pressed && { opacity: 0.9 }]}
             accessibilityRole="button"
             accessibilityLabel="Envoyer un message">
@@ -183,6 +253,41 @@ export default function SuggestionProfilScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={reportModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReportModalVisible(false)}>
+        <View style={styles.reportModalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setReportModalVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel={t('moderation.reportTapOutside')}
+          />
+          <View style={styles.reportModalCard}>
+            <View style={styles.reportModalIconCircle}>
+              <Ionicons name="warning" size={36} color={DANGER_MODAL} />
+            </View>
+            <Text style={styles.reportModalTitle}>{t('moderation.reportConfirmTitle')}</Text>
+            <Text style={styles.reportModalMessage}>{t('moderation.reportConfirmMessage')}</Text>
+            <View style={styles.reportModalActions}>
+              <Pressable
+                onPress={() => setReportModalVisible(false)}
+                style={({ pressed }) => [styles.reportModalBtnSecondary, pressed && { opacity: 0.85 }]}>
+                <Text style={styles.reportModalBtnSecondaryTxt}>{t('moderation.reportCancel')}</Text>
+              </Pressable>
+              <Pressable
+                onPress={confirmSubmitReport}
+                style={({ pressed }) => [styles.reportModalBtnDanger, pressed && { opacity: 0.9 }]}>
+                <Ionicons name="warning" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.reportModalBtnDangerTxt}>{t('moderation.reportConfirmOk')}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -202,11 +307,21 @@ const styles = StyleSheet.create({
     width: '100%',
     position: 'relative',
     backgroundColor: '#111',
+    overflow: 'hidden',
   },
   heroImage: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     width: '100%',
     height: '100%',
+    zIndex: 0,
+  },
+  heroGradient: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
   },
   backBtn: {
     position: 'absolute',
@@ -216,6 +331,17 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  reportBtn: {
+    position: 'absolute',
+    right: 8,
+    zIndex: 4,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: 22,
   },
   heroTextBlock: {
     position: 'absolute',
@@ -384,5 +510,83 @@ const styles = StyleSheet.create({
   fallbackBtnText: {
     color: Design.textPrimary,
     fontWeight: '700',
+  },
+  reportModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    justifyContent: 'center',
+    paddingHorizontal: 22,
+    paddingVertical: 24,
+  },
+  reportModalCard: {
+    backgroundColor: '#252528',
+    borderRadius: 20,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+    maxWidth: 400,
+    width: '100%',
+    alignSelf: 'center',
+    zIndex: 2,
+    ...Platform.select({
+      android: { elevation: 8 },
+    }),
+  },
+  reportModalIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255, 69, 58, 0.18)',
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  reportModalTitle: {
+    color: Design.textPrimary,
+    fontSize: 19,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  reportModalMessage: {
+    color: Design.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  reportModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 24,
+  },
+  reportModalBtnSecondary: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#3A3A3C',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reportModalBtnSecondaryTxt: {
+    color: Design.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  reportModalBtnDanger: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: DANGER_MODAL,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reportModalBtnDangerTxt: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
   },
 });

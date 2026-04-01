@@ -6,8 +6,8 @@ import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -29,6 +29,21 @@ const BORDER = 'rgba(255,255,255,0.08)';
 const ACCENT = '#9B5DE5';
 const BTN_GRADIENT = ['#5B2D8C', '#7B2D7A', '#C23B8E'] as const;
 const MUTED = 'rgba(142, 142, 147, 0.95)';
+
+/** Sur le web, `Alert.alert` de React Native ne fait rien : les validations semblaient muettes. */
+function alertMessage(title: string, message?: string) {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined') {
+      window.alert(message ? `${title}\n\n${message}` : title);
+    }
+    return;
+  }
+  if (message) {
+    Alert.alert(title, message);
+  } else {
+    Alert.alert(title);
+  }
+}
 
 function toIsoDateKey(d: Date): string {
   const y = d.getFullYear();
@@ -53,10 +68,17 @@ function frenchSectionLabel(d: Date): string {
 export default function CreateEventScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { addEvent, events, createEmptyGroup } = useMessaging();
+  const rawParams = useLocalSearchParams<{ conversationId?: string; title?: string }>();
+  const linkedConversationId = useMemo(() => {
+    const raw = rawParams.conversationId;
+    const id = Array.isArray(raw) ? raw[0] : raw;
+    return id?.trim() ? id.trim() : undefined;
+  }, [rawParams.conversationId]);
+  const { addEvent, events, createEmptyGroup, postEventGroupWelcome, getConversation } = useMessaging();
   const { getLimits, isPremium, isRestricted } = useProfileSettings();
 
   const [title, setTitle] = useState('');
+  const titleSeededRef = useRef(false);
   const [eventDate, setEventDate] = useState(() => {
     const d = new Date();
     const ms = 1000 * 60 * 15;
@@ -74,6 +96,24 @@ export default function CreateEventScreen() {
       return String(Math.min(Math.max(1, n), cap));
     });
   }, [isPremium, limits.maxParticipants]);
+
+  /** Depuis une discussion : préremplir le titre (param ou nom du groupe / DM). */
+  useEffect(() => {
+    if (titleSeededRef.current || !linkedConversationId) return;
+    const rawT = rawParams.title;
+    const titleParam =
+      typeof rawT === 'string'
+        ? rawT.trim()
+        : Array.isArray(rawT) && rawT[0] != null
+          ? String(rawT[0]).trim()
+          : '';
+    const fromConv = getConversation(linkedConversationId)?.title?.trim() ?? '';
+    const seed = titleParam || fromConv;
+    if (seed) {
+      setTitle(seed);
+      titleSeededRef.current = true;
+    }
+  }, [linkedConversationId, rawParams.title, getConversation]);
   const [description, setDescription] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [hideAddress, setHideAddress] = useState(false);
@@ -96,7 +136,7 @@ export default function CreateEventScreen() {
   const pickImage = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Accès photos', 'Autorisez l’accès à la bibliothèque pour ajouter une photo.');
+      alertMessage('Accès photos', 'Autorisez l’accès à la bibliothèque pour ajouter une photo.');
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -119,19 +159,16 @@ export default function CreateEventScreen() {
     const maxN = parseInt(maxParticipants.trim(), 10);
 
     if (!t) {
-      Alert.alert('Titre', 'Indiquez un titre pour votre événement.');
+      alertMessage('Titre', 'Indiquez un titre pour votre événement.');
       return;
     }
     if (!l) {
-      Alert.alert('Lieu', 'Indiquez un lieu ou un point de rendez-vous.');
+      alertMessage('Lieu', 'Indiquez un lieu ou un point de rendez-vous.');
       return;
     }
     const maxCapVal = limits.maxParticipants;
     if (!Number.isFinite(maxN) || maxN < 2 || maxN > maxCapVal) {
-      Alert.alert(
-        'Participants',
-        `Le nombre de participants doit être entre 2 et ${maxCapVal}.`,
-      );
+      alertMessage('Participants', `Le nombre de participants doit être entre 2 et ${maxCapVal}.`);
       return;
     }
 
@@ -144,7 +181,7 @@ export default function CreateEventScreen() {
       isRestricted('limitEventCreation') &&
       activeOrganizer.length >= limits.maxActiveEvents
     ) {
-      Alert.alert(
+      alertMessage(
         'Limite atteinte',
         `En mode gratuit vous ne pouvez avoir que ${limits.maxActiveEvents} sortie active à la fois (vous en avez ${activeOrganizer.length}). Passez en Premium dans l’onglet Profil.`,
       );
@@ -154,12 +191,20 @@ export default function CreateEventScreen() {
     const cappedMax = Math.min(maxN, maxCapVal);
 
     const dateKey = toIsoDateKey(parsed);
-    const discussionTitle = `Sortie : ${t}`;
-    const newConvId = createEmptyGroup(discussionTitle);
+    let targetConversationId: string;
+    if (linkedConversationId) {
+      if (!getConversation(linkedConversationId)) {
+        alertMessage('Discussion', 'Cette conversation n’existe plus.');
+        return;
+      }
+      targetConversationId = linkedConversationId;
+    } else {
+      targetConversationId = createEmptyGroup(`Sortie : ${t}`);
+    }
 
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     addEvent({
-      conversationId: newConvId,
+      conversationId: targetConversationId,
       title: t,
       dateLabel: frenchShortDate(parsed),
       location: l,
@@ -174,6 +219,7 @@ export default function CreateEventScreen() {
       hideAddress,
       manualApproval,
     });
+    postEventGroupWelcome(targetConversationId, t);
     router.back();
   };
 
@@ -418,8 +464,11 @@ export default function CreateEventScreen() {
             </Pressable>
             <Pressable
               onPress={submit}
+              accessibilityRole="button"
+              accessibilityLabel="Créer l'événement"
               style={({ pressed }) => [styles.createBtnWrap, pressed && { transform: [{ scale: 0.985 }] }]}>
               <LinearGradient
+                pointerEvents="none"
                 colors={[...BTN_GRADIENT]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -720,6 +769,9 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      },
       ios: {
         shadowColor: '#C23B8E',
         shadowOffset: { width: 0, height: 8 },
@@ -729,6 +781,7 @@ const styles = StyleSheet.create({
       android: {
         elevation: 10,
       },
+      default: {},
     }),
   },
   createBtn: {

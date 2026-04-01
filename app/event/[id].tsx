@@ -1,17 +1,21 @@
 import { Design } from '@/constants/design';
 import { useMessaging } from '@/context/MessagingContext';
-import { getEventDetailRich } from '@/data/eventDetailSeed';
-import type { EventParticipantDetail } from '@/data/eventDetailSeed';
+import {
+  getEventDetailRich,
+  sortEventParticipants,
+  type EventParticipantDetail,
+  type EventWaitingMember,
+} from '@/data/eventDetailSeed';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   Alert,
   Dimensions,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
@@ -56,23 +60,61 @@ function participantLabel(p: EventParticipantDetail): string {
   return p.displayName;
 }
 
+function confirmRetrait(message: string, onConfirm: () => void) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (window.confirm(message)) onConfirm();
+    return;
+  }
+  Alert.alert('Confirmation', message, [
+    { text: 'Annuler', style: 'cancel' },
+    { text: 'Retirer', style: 'destructive', onPress: onConfirm },
+  ]);
+}
+
 export default function EventDetailScreen() {
   const raw = useLocalSearchParams<{ id: string }>();
   const eventId = Array.isArray(raw.id) ? raw.id[0] : raw.id;
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { getEventById, joinEvent, toggleEventFavorite } = useMessaging();
+  const {
+    getEventById,
+    getConversation,
+    joinEvent,
+    leaveEvent,
+    toggleEventFavorite,
+    getViewerCardStatus,
+    approveJoinRequest,
+    getPendingApprovalCount,
+    getPendingJoinRequests,
+    getApprovedParticipantsExtra,
+    getRemovedSeedParticipantIds,
+    rejectPendingJoinRequest,
+    removeEventParticipant,
+  } = useMessaging();
 
   const event = eventId ? getEventById(eventId) : undefined;
-  const rich = useMemo(() => (event ? getEventDetailRich(event) : null), [event]);
+  const rich = useMemo(() => {
+    if (!event) return null;
+    const base = getEventDetailRich(event);
+    const removed = getRemovedSeedParticipantIds(event.id);
+    const extras = getApprovedParticipantsExtra(event.id);
+    const seedParts = base.participants.filter((p) => !removed.has(p.id));
+    const participants = sortEventParticipants([...seedParts, ...extras]);
+    const waitingList = getPendingJoinRequests(event.id);
+    return { ...base, participants, waitingList };
+  }, [
+    event,
+    getPendingJoinRequests,
+    getApprovedParticipantsExtra,
+    getRemovedSeedParticipantIds,
+  ]);
 
-  const [waitingToggle, setWaitingToggle] = useState<Record<string, boolean>>({});
-
-  const isRegistered = useMemo(
-    () =>
-      event?.cardStatus === 'inscrit' || event?.cardStatus === 'organisateur',
-    [event?.cardStatus],
+  const viewerStatus = useMemo(
+    () => (event ? getViewerCardStatus(event) : undefined),
+    [event, getViewerCardStatus],
   );
+
+  const isPendingApproval = viewerStatus === 'en_attente';
 
   const isFull = useMemo(
     () =>
@@ -81,19 +123,51 @@ export default function EventDetailScreen() {
   );
 
   const canJoin = useMemo(
-    () => event?.cardStatus === 'join' && !isFull,
-    [event?.cardStatus, isFull],
+    () => viewerStatus === 'join' && !isFull,
+    [viewerStatus, isFull],
   );
 
+  const pendingCount = event ? getPendingApprovalCount(event.id) : 0;
+  const canApproveJoin =
+    !!event &&
+    event.manualApproval &&
+    viewerStatus === 'organisateur' &&
+    pendingCount > 0 &&
+    !isFull;
+
+  const canOpenEventChat =
+    viewerStatus === 'inscrit' || viewerStatus === 'organisateur';
+
   const openChat = useCallback(() => {
-    if (!event || !isRegistered) return;
-    router.push(`/chat/${event.conversationId}`);
-  }, [router, event, isRegistered]);
+    if (!event || !canOpenEventChat) return;
+    const cid = event.conversationId;
+    if (!getConversation(cid)) {
+      Alert.alert(
+        'Discussion',
+        'La conversation liée à cette sortie est introuvable. Réessayez après rechargement.',
+      );
+      return;
+    }
+    router.push({
+      pathname: '/chat/[id]',
+      params: { id: cid, eventId: event.id },
+    });
+  }, [router, event, canOpenEventChat, getConversation]);
 
   const onJoin = useCallback(() => {
     if (!event || !canJoin) return;
     joinEvent(event.id);
   }, [event, canJoin, joinEvent]);
+
+  const onLeaveOrCancel = useCallback(() => {
+    if (!event) return;
+    leaveEvent(event.id);
+  }, [event, leaveEvent]);
+
+  const onApproveJoin = useCallback(() => {
+    if (!event || !canApproveJoin) return;
+    approveJoinRequest(event.id);
+  }, [event, canApproveJoin, approveJoinRequest]);
 
   if (!event || !rich) {
     return (
@@ -110,11 +184,46 @@ export default function EventDetailScreen() {
   const priceSub = formatPriceSubheader(event.priceLabel);
   const dateTimeLine = `${event.dateLabel}, ${event.timeShort}`;
 
-  const footerActionLabel = isRegistered
-    ? 'Inscrit ✓'
-    : isFull
-      ? 'Complet'
-      : "+ S'inscrire";
+  const mainFooter = (() => {
+    if (isPendingApproval) {
+      return {
+        label: 'Annuler ma demande',
+        onPress: onLeaveOrCancel,
+        disabled: false,
+        mode: 'active' as const,
+      };
+    }
+    if (viewerStatus === 'organisateur') {
+      return {
+        label: 'Organisateur',
+        onPress: undefined,
+        disabled: true,
+        mode: 'muted' as const,
+      };
+    }
+    if (viewerStatus === 'inscrit') {
+      return {
+        label: 'Quitter',
+        onPress: onLeaveOrCancel,
+        disabled: false,
+        mode: 'leave' as const,
+      };
+    }
+    if (canJoin) {
+      return {
+        label: "+ S'inscrire",
+        onPress: onJoin,
+        disabled: false,
+        mode: 'active' as const,
+      };
+    }
+    return {
+      label: 'Complet',
+      onPress: undefined,
+      disabled: true,
+      mode: 'muted' as const,
+    };
+  })();
 
   return (
     <View style={styles.root}>
@@ -221,13 +330,19 @@ export default function EventDetailScreen() {
                       <Text style={styles.ratingNum}>{p.rating.toFixed(1)}</Text>
                     </View>
                   </View>
-                  {rich.showRemoveOtherParticipants && !p.isSelf ? (
+                  {rich.showRemoveOtherParticipants && !p.isSelf && !p.isOrganizer ? (
                     <Pressable
                       style={styles.removeBtn}
                       onPress={() =>
-                        Alert.alert('Démo', `Retirer ${p.displayName} — non implémenté en maquette.`)
+                        confirmRetrait(
+                          `Retirer ${p.displayName} de la sortie ?`,
+                          () =>
+                            removeEventParticipant(event.id, p.id, { isOrganizer: p.isOrganizer }),
+                        )
                       }
-                      hitSlop={8}>
+                      hitSlop={8}
+                      accessibilityLabel={`Retirer ${p.displayName}`}
+                      accessibilityRole="button">
                       <Ionicons name="person-remove-outline" size={22} color="#FF453A" />
                     </Pressable>
                   ) : (
@@ -238,10 +353,23 @@ export default function EventDetailScreen() {
             </View>
           ) : null}
 
+          {canApproveJoin ? (
+            <View style={styles.approveBanner}>
+              <Text style={styles.approveBannerText}>
+                {pendingCount} demande{pendingCount > 1 ? 's' : ''} d&apos;inscription à valider
+              </Text>
+              <Pressable onPress={onApproveJoin} style={styles.approveBtn}>
+                <Text style={styles.approveBtnText}>Accepter l&apos;inscription (accès au chat)</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           {rich.waitingList.length > 0 ? (
             <View style={styles.block}>
-              <Text style={styles.waitingTitle}>⌛ Liste d&apos;attente ({rich.waitingList.length})</Text>
-              {rich.waitingList.map((w) => (
+              <Text style={styles.waitingTitle}>
+                ⌛ Liste d&apos;attente — à valider ({rich.waitingList.length})
+              </Text>
+              {rich.waitingList.map((w: EventWaitingMember) => (
                 <View key={w.id} style={styles.participantRow}>
                   <Image
                     source={{
@@ -261,12 +389,23 @@ export default function EventDetailScreen() {
                       <Text style={styles.ratingNum}>{w.rating.toFixed(1)}</Text>
                     </View>
                   </View>
-                  <Switch
-                    value={!!waitingToggle[w.id]}
-                    onValueChange={(v) => setWaitingToggle((prev) => ({ ...prev, [w.id]: v }))}
-                    trackColor={{ false: '#3A3A3C', true: 'rgba(52,199,89,0.45)' }}
-                    thumbColor={waitingToggle[w.id] ? '#34C759' : '#787880'}
-                  />
+                  {viewerStatus === 'organisateur' ? (
+                    <Pressable
+                      style={styles.removeBtn}
+                      onPress={() =>
+                        confirmRetrait(
+                          `Refuser / retirer la demande de ${w.displayName} ?`,
+                          () => rejectPendingJoinRequest(event.id, w.id),
+                        )
+                      }
+                      hitSlop={8}
+                      accessibilityLabel={`Retirer ${w.displayName} de la file`}
+                      accessibilityRole="button">
+                      <Ionicons name="trash-outline" size={22} color="#FF453A" />
+                    </Pressable>
+                  ) : (
+                    <View style={styles.removePlaceholder} />
+                  )}
                 </View>
               ))}
             </View>
@@ -291,11 +430,12 @@ export default function EventDetailScreen() {
             <Text style={styles.footerPriceSub}>{priceFooter.sub}</Text>
           </View>
 
-          {isRegistered ? (
+          {canOpenEventChat ? (
             <Pressable
               onPress={openChat}
               style={styles.chatBtn}
-              accessibilityLabel="Ouvrir la conversation du groupe">
+              accessibilityLabel="Ouvrir la discussion de la sortie"
+              accessibilityRole="button">
               <Ionicons name="chatbubble-outline" size={22} color="#fff" />
               <View style={styles.chatPlusBadge}>
                 <Text style={styles.chatPlusText}>+</Text>
@@ -304,20 +444,22 @@ export default function EventDetailScreen() {
           ) : null}
 
           <Pressable
-            onPress={isRegistered ? undefined : canJoin ? onJoin : undefined}
-            disabled={isRegistered || !canJoin}
+            onPress={mainFooter.onPress}
+            disabled={mainFooter.disabled}
             style={[
               styles.actionBtn,
-              (isRegistered || !canJoin) && styles.actionBtnMuted,
-              canJoin && styles.actionBtnActive,
+              mainFooter.mode === 'muted' && styles.actionBtnMuted,
+              mainFooter.mode === 'active' && styles.actionBtnActive,
+              mainFooter.mode === 'leave' && styles.actionBtnLeave,
             ]}>
             <Text
               style={[
                 styles.actionBtnText,
-                (isRegistered || !canJoin) && styles.actionBtnTextMuted,
-                canJoin && styles.actionBtnTextActive,
+                mainFooter.mode === 'muted' && styles.actionBtnTextMuted,
+                mainFooter.mode === 'active' && styles.actionBtnTextActive,
+                mainFooter.mode === 'leave' && styles.actionBtnTextLeave,
               ]}>
-              {footerActionLabel}
+              {mainFooter.label}
             </Text>
           </Pressable>
         </View>
@@ -624,6 +766,38 @@ const styles = StyleSheet.create({
   },
   actionBtnTextActive: {
     color: '#fff',
+  },
+  approveBanner: {
+    marginTop: 20,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(52,199,89,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(52,199,89,0.35)',
+  },
+  approveBannerText: {
+    color: Design.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  approveBtn: {
+    backgroundColor: '#34C759',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  approveBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  actionBtnLeave: {
+    borderColor: 'rgba(255,69,58,0.55)',
+    backgroundColor: 'rgba(255,69,58,0.12)',
+  },
+  actionBtnTextLeave: {
+    color: '#FF453A',
   },
   fallback: {
     flex: 1,

@@ -57,7 +57,8 @@ export interface Message {
   mediaKind?: MessageMediaKind;
 }
 
-export type EventCardStatus = 'inscrit' | 'organisateur' | 'join';
+/** Statut de la participation (côté utilisateur courant dans l’app démo). */
+export type EventCardStatus = 'inscrit' | 'organisateur' | 'join' | 'en_attente';
 
 export interface Event {
   id: string;

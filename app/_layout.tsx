@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 
 import { Design } from '@/constants/design';
 import { MessagingProvider } from '@/context/MessagingContext';
+import { ModerationProvider } from '@/context/ModerationContext';
 import { ProfileIdentityProvider } from '@/context/ProfileIdentityContext';
 import { ProfileSettingsProvider } from '@/context/ProfileSettingsContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -36,6 +37,7 @@ export default function RootLayout() {
     <ThemeProvider value={dark ? AppDarkTheme : DefaultTheme}>
       <ProfileSettingsProvider>
         <ProfileIdentityProvider>
+        <ModerationProvider>
         <MessagingProvider>
         <Stack
           screenOptions={{
@@ -83,6 +85,7 @@ export default function RootLayout() {
         </Stack>
         <StatusBar style={dark ? 'light' : 'dark'} />
         </MessagingProvider>
+        </ModerationProvider>
         </ProfileIdentityProvider>
       </ProfileSettingsProvider>
     </ThemeProvider>

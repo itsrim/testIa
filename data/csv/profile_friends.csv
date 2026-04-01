@@ -1,7 +1,7 @@
-profilId,name,imageUrl,eventsInCommon
-sg3,Inès K.,https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=240&q=80,15
-sg4,Hugo P.,https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=240&q=80,12
-sg1,Clara M.,https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=240&q=80,8
-sg7,Léa F.,https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=240&q=80,22
-sg6,Nathan C.,https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=240&q=80,4
-sg2,Lucas B.,https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=240&q=80,6
+profilId,name,age,imageUrl,eventsInCommon,city
+sg3,Inès K.,25,https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=800&q=85&auto=format&fit=crop,3,Genève
+sg4,Hugo P.,31,https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=85&auto=format&fit=crop,18,Lausanne
+sg1,Clara M.,34,https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&q=85&auto=format&fit=crop,5,Annecy
+sg7,Léa F.,24,https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=800&q=85&auto=format&fit=crop,9,Genève
+sg6,Nathan C.,27,https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&q=85&auto=format&fit=crop,7,Bordeaux
+sg2,Lucas B.,28,https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=800&q=85&auto=format&fit=crop,12,Lyon

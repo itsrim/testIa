@@ -4,26 +4,49 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { playIncomingMessageFeedback } from '@/lib/playIncomingMessageFeedback';
 import { verifyAndRepairData } from '@/lib/dataIntegrity';
 import {
   getEvents,
+  getPersistedFavoriteConversationIds,
   getPersistedMessagingChat,
   mockMessagingSeed,
   putEvents,
+  putPersistedFavoriteConversationIds,
   putPersistedMessagingChat,
 } from '@/services/dataApi';
+import {
+  getInitialPendingQueuesByEvent,
+  type EventParticipantDetail,
+  type EventWaitingMember,
+} from '@/data/eventDetailSeed';
 import {
   groupHasFriendForMessages,
   type Conversation,
   type GroupChatSettings,
   type GroupMember,
+  type EventCardStatus,
   type Message,
   type MessageMediaAttachment,
   type Event,
 } from '@/types/messaging';
+
+function participantFromWaitingMember(w: EventWaitingMember): EventParticipantDetail {
+  const avatarUrl =
+    w.avatarUrl ??
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(w.displayName)}&size=128&background=555&color=fff`;
+  return {
+    id: `ap-${w.id}`,
+    displayName: w.displayName,
+    avatarUrl,
+    rating: w.rating,
+    isOrganizer: false,
+    isSelf: Boolean(w.isViewerRequest),
+  };
+}
 
 function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -60,6 +83,15 @@ const GRADIENT_POOL: readonly (readonly [string, string])[] = [
   ['#66BB6A', '#2E7D32'],
 ];
 
+function pickGradientForProfilId(profilId: string): readonly [string, string] {
+  let h = 0;
+  for (let i = 0; i < profilId.length; i++) {
+    h = Math.imul(31, h) + profilId.charCodeAt(i);
+  }
+  const idx = Math.abs(h) % GRADIENT_POOL.length;
+  return GRADIENT_POOL[idx];
+}
+
 export type NewEventInput = {
   conversationId: string;
   title: string;
@@ -81,6 +113,8 @@ export type NewEventInput = {
 type MessagingContextValue = {
   /** Ordre du bandeau « Conversations favoris » en tête d’écran (ids de `conversations`). */
   favoriteConversationIds: readonly string[];
+  /** Ajoute ou retire la conversation du bandeau favoris. */
+  toggleConversationFavorite: (conversationId: string) => void;
   conversations: Conversation[];
   getConversation: (id: string) => Conversation | undefined;
   messagesByConversation: Record<string, Message[]>;
@@ -91,10 +125,29 @@ type MessagingContextValue = {
   eventsForConversation: (conversationId: string) => Event[];
   getEventById: (eventId: string) => Event | undefined;
   toggleEventFavorite: (eventId: string) => void;
-  /** Passe un événement en statut inscrit (démo). */
+  /** Inscription : accès au chat lié une fois accepté (ou tout de suite si pas de validation manuelle). */
   joinEvent: (eventId: string) => void;
-  /** Annule la participation d'un événement (démo). */
+  /** Quitte la sortie et retire du chat de groupe associé (si inscrit). Annule une demande en attente. */
   leaveEvent: (eventId: string) => void;
+  /** Statut participation côté utilisateur (inclut « en attente » si validation manuelle). */
+  getViewerCardStatus: (event: Event) => EventCardStatus;
+  /** Organisateur : approuve la première demande en file (FIFO). */
+  approveJoinRequest: (eventId: string) => void;
+  /** Organisateur : refuse / retire une demande de la file d’attente. */
+  rejectPendingJoinRequest: (eventId: string, requestId: string) => void;
+  /** Organisateur : retire un participant confirmé (hors organisateur). */
+  removeEventParticipant: (
+    eventId: string,
+    participantId: string,
+    opts: { isOrganizer: boolean },
+  ) => void;
+  /** Message d’accueil dans le fil du groupe lié à une nouvelle sortie. */
+  postEventGroupWelcome: (conversationId: string, eventTitle: string) => void;
+  /** Nombre de demandes d’inscription en attente (validation manuelle). */
+  getPendingApprovalCount: (eventId: string) => number;
+  getPendingJoinRequests: (eventId: string) => EventWaitingMember[];
+  getApprovedParticipantsExtra: (eventId: string) => EventParticipantDetail[];
+  getRemovedSeedParticipantIds: (eventId: string) => ReadonlySet<string>;
   messagesTabBadgeCount: number;
   visitesTabBadgeCount: number;
   getGroupMembers: (conversationId: string) => GroupMember[];
@@ -111,6 +164,11 @@ type MessagingContextValue = {
   ) => void;
   /** Crée un groupe dont vous êtes le seul membre ; retourne l’id de conversation. */
   createEmptyGroup: (title: string) => string;
+  /** Ouvre ou crée une discussion directe avec une fiche (`profilId`). */
+  ensureDirectConversationForProfile: (input: {
+    profilId: string;
+    displayTitle: string;
+  }) => string;
   /**
    * Démo : ajoute un message entrant fictif et applique son / « notification »
    * selon les réglages (vibration si sons autorisés, alerte + badge si notifs autorisées).
@@ -138,6 +196,54 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     Record<string, GroupChatSettings>
   >({});
   const [chatRestored, setChatRestored] = useState(false);
+  /** Surcharge locale : ex. en_attente sans modifier la ligne CSV `cardStatus` (démo mono-utilisateur). */
+  const [participationOverlay, setParticipationOverlay] = useState<
+    Record<string, EventCardStatus>
+  >({});
+  const [pendingJoinQueueByEvent, setPendingJoinQueueByEvent] = useState<
+    Record<string, EventWaitingMember[]>
+  >(() => getInitialPendingQueuesByEvent());
+  const [approvedParticipantsByEvent, setApprovedParticipantsByEvent] = useState<
+    Record<string, EventParticipantDetail[]>
+  >({});
+  const [removedSeedParticipantIdsByEvent, setRemovedSeedParticipantIdsByEvent] = useState<
+    Record<string, string[]>
+  >({});
+  const viewerPendingJoinIdRef = useRef<Record<string, string>>({});
+  const [favoriteConversationIds, setFavoriteConversationIds] = useState<string[]>(() => [
+    ...seedFavoriteConversationIds,
+  ]);
+  const [favoriteIdsReady, setFavoriteIdsReady] = useState(false);
+  const userModifiedFavoritesRef = useRef(false);
+  const participationOverlayRef = React.useRef(participationOverlay);
+  participationOverlayRef.current = participationOverlay;
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const stored = await getPersistedFavoriteConversationIds();
+        if (!alive) return;
+        if (!userModifiedFavoritesRef.current && stored !== null) {
+          setFavoriteConversationIds(stored);
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (alive) setFavoriteIdsReady(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!favoriteIdsReady) return;
+    void putPersistedFavoriteConversationIds(favoriteConversationIds).catch((err) =>
+      console.warn('Failed to save favorite conversations', err),
+    );
+  }, [favoriteConversationIds, favoriteIdsReady]);
 
   useEffect(() => {
     (async () => {
@@ -246,35 +352,277 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const toggleConversationFavorite = useCallback((conversationId: string) => {
+    userModifiedFavoritesRef.current = true;
+    setFavoriteConversationIds((prev) =>
+      prev.includes(conversationId)
+        ? prev.filter((x) => x !== conversationId)
+        : [...prev, conversationId],
+    );
+  }, []);
+
   const getEventById = useCallback(
     (eventId: string) => events.find((s) => s.id === eventId),
     [events],
   );
 
-  const joinEvent = useCallback((eventId: string) => {
-    setEvents((prev) =>
-      prev.map((s) => {
-        if (s.id !== eventId || s.cardStatus !== 'join') return s;
-        if (s.participantCount >= s.participantMax) return s;
-        return {
-          ...s,
-          cardStatus: 'inscrit',
-          participantCount: s.participantCount + 1,
-        };
-      }),
-    );
+  const getViewerCardStatus = useCallback(
+    (event: Event): EventCardStatus => {
+      if (event.cardStatus === 'organisateur') return 'organisateur';
+      const o = participationOverlay[event.id];
+      if (o) return o;
+      return event.cardStatus;
+    },
+    [participationOverlay],
+  );
+
+  const getPendingApprovalCount = useCallback(
+    (eventId: string) => pendingJoinQueueByEvent[eventId]?.length ?? 0,
+    [pendingJoinQueueByEvent],
+  );
+
+  const getPendingJoinRequests = useCallback(
+    (eventId: string) => pendingJoinQueueByEvent[eventId] ?? [],
+    [pendingJoinQueueByEvent],
+  );
+
+  const getApprovedParticipantsExtra = useCallback(
+    (eventId: string) => approvedParticipantsByEvent[eventId] ?? [],
+    [approvedParticipantsByEvent],
+  );
+
+  const getRemovedSeedParticipantIds = useCallback(
+    (eventId: string) => new Set(removedSeedParticipantIdsByEvent[eventId] ?? []),
+    [removedSeedParticipantIdsByEvent],
+  );
+
+  const rejectPendingJoinRequest = useCallback((eventId: string, requestId: string) => {
+    setPendingJoinQueueByEvent((q) => ({
+      ...q,
+      [eventId]: (q[eventId] ?? []).filter((x) => x.id !== requestId),
+    }));
+    const vid = viewerPendingJoinIdRef.current[eventId];
+    if (vid === requestId) {
+      delete viewerPendingJoinIdRef.current[eventId];
+      setParticipationOverlay((o) => {
+        const { [eventId]: _, ...rest } = o;
+        return rest;
+      });
+    }
   }, []);
 
-  const leaveEvent = useCallback((eventId: string) => {
-    setEvents((prev) =>
-      prev.map((s) => {
-        if (s.id !== eventId || s.cardStatus !== 'inscrit') return s;
-        return {
-          ...s,
-          cardStatus: 'join',
-          participantCount: Math.max(0, s.participantCount - 1),
-        };
-      }),
+  const removeEventParticipant = useCallback(
+    (eventId: string, participantId: string, opts: { isOrganizer: boolean }) => {
+      if (opts.isOrganizer) return;
+
+      if (participantId.startsWith('ap-')) {
+        setApprovedParticipantsByEvent((ap) => {
+          const list = ap[eventId] ?? [];
+          if (!list.some((p) => p.id === participantId)) return ap;
+          setEvents((prev) =>
+            prev.map((s) =>
+              s.id === eventId
+                ? { ...s, participantCount: Math.max(1, s.participantCount - 1) }
+                : s,
+            ),
+          );
+          return { ...ap, [eventId]: list.filter((p) => p.id !== participantId) };
+        });
+        return;
+      }
+
+      setRemovedSeedParticipantIdsByEvent((rm) => {
+        const cur = rm[eventId] ?? [];
+        if (cur.includes(participantId)) return rm;
+        setEvents((prev) =>
+          prev.map((s) =>
+            s.id === eventId
+              ? { ...s, participantCount: Math.max(1, s.participantCount - 1) }
+              : s,
+          ),
+        );
+        return { ...rm, [eventId]: [...cur, participantId] };
+      });
+    },
+    [],
+  );
+
+  const addSelfToEventGroupChat = useCallback((conversationId: string) => {
+    setMembersByConversation((pm) => {
+      const list = pm[conversationId] ?? [];
+      if (list.some((m) => m.isSelf)) return pm;
+      const g = GRADIENT_POOL[list.length % GRADIENT_POOL.length];
+      const member: GroupMember = {
+        id: makeId('mem'),
+        displayName: 'Moi',
+        isSelf: true,
+        avatarGradient: [g[0], g[1]],
+        isFriendWithMe: false,
+      };
+      const next = [...list, member];
+      setConversations((pc) =>
+        pc.map((c) =>
+          c.id === conversationId && c.type === 'group' ? { ...c, memberCount: next.length } : c,
+        ),
+      );
+      return { ...pm, [conversationId]: next };
+    });
+  }, []);
+
+  const removeSelfFromEventGroupChat = useCallback((conversationId: string) => {
+    setMembersByConversation((pm) => {
+      const list = pm[conversationId] ?? [];
+      const next = list.filter((m) => !m.isSelf);
+      setConversations((pc) =>
+        pc.map((c) =>
+          c.id === conversationId && c.type === 'group' ? { ...c, memberCount: next.length } : c,
+        ),
+      );
+      return { ...pm, [conversationId]: next };
+    });
+  }, []);
+
+  const joinEvent = useCallback(
+    (eventId: string) => {
+      setEvents((prevEvents) => {
+        const ev = prevEvents.find((e) => e.id === eventId);
+        if (!ev || ev.cardStatus !== 'join' || ev.participantCount >= ev.participantMax) {
+          return prevEvents;
+        }
+
+        if (ev.manualApproval) {
+          const id = makeId('pj');
+          viewerPendingJoinIdRef.current[eventId] = id;
+          setParticipationOverlay((o) => ({ ...o, [eventId]: 'en_attente' }));
+          setPendingJoinQueueByEvent((q) => ({
+            ...q,
+            [eventId]: [
+              ...(q[eventId] ?? []),
+              {
+                id,
+                displayName: 'Vous (demande en cours)',
+                rating: 4.5,
+                avatarUrl:
+                  'https://ui-avatars.com/api/?name=Vous&size=128&background=78909C&color=fff',
+                isViewerRequest: true,
+              },
+            ],
+          }));
+          return prevEvents;
+        }
+
+        const cid = ev.conversationId;
+        addSelfToEventGroupChat(cid);
+
+        return prevEvents.map((s) =>
+          s.id === eventId
+            ? { ...s, cardStatus: 'inscrit', participantCount: s.participantCount + 1 }
+            : s,
+        );
+      });
+    },
+    [addSelfToEventGroupChat],
+  );
+
+  const leaveEvent = useCallback(
+    (eventId: string) => {
+      const pending = participationOverlayRef.current[eventId] === 'en_attente';
+      if (pending) {
+        const vid = viewerPendingJoinIdRef.current[eventId];
+        if (vid) {
+          setPendingJoinQueueByEvent((q) => ({
+            ...q,
+            [eventId]: (q[eventId] ?? []).filter((x) => x.id !== vid),
+          }));
+          delete viewerPendingJoinIdRef.current[eventId];
+        }
+        setParticipationOverlay((o) => {
+          const { [eventId]: _, ...rest } = o;
+          return rest;
+        });
+        return;
+      }
+
+      setEvents((prev) => {
+        const ev = prev.find((s) => s.id === eventId);
+        if (!ev || ev.cardStatus === 'organisateur') return prev;
+        const overlaySt = participationOverlayRef.current[eventId];
+        const effective = overlaySt ?? ev.cardStatus;
+        if (effective !== 'inscrit') return prev;
+        removeSelfFromEventGroupChat(ev.conversationId);
+        setParticipationOverlay((o) => {
+          const { [eventId]: _, ...rest } = o;
+          return rest;
+        });
+        return prev.map((s) =>
+          s.id === eventId
+            ? {
+                ...s,
+                cardStatus: 'join',
+                participantCount: Math.max(0, s.participantCount - 1),
+              }
+            : s,
+        );
+      });
+    },
+    [removeSelfFromEventGroupChat],
+  );
+
+  const approveJoinRequest = useCallback(
+    (eventId: string) => {
+      const ev = events.find((e) => e.id === eventId);
+      if (!ev || !ev.manualApproval || ev.cardStatus !== 'organisateur') return;
+      if (ev.participantCount >= ev.participantMax) return;
+
+      setPendingJoinQueueByEvent((queues) => {
+        const queue = [...(queues[eventId] ?? [])];
+        if (queue.length === 0) return queues;
+        const first = queue[0];
+        const rest = queue.slice(1);
+        const part = participantFromWaitingMember(first);
+
+        setApprovedParticipantsByEvent((ap) => ({
+          ...ap,
+          [eventId]: [...(ap[eventId] ?? []), part],
+        }));
+        setEvents((prev) =>
+          prev.map((s) =>
+            s.id === eventId ? { ...s, participantCount: s.participantCount + 1 } : s,
+          ),
+        );
+
+        if (first.isViewerRequest) {
+          addSelfToEventGroupChat(ev.conversationId);
+          setParticipationOverlay((o) => ({ ...o, [eventId]: 'inscrit' }));
+          delete viewerPendingJoinIdRef.current[eventId];
+        }
+
+        return { ...queues, [eventId]: rest };
+      });
+    },
+    [events, addSelfToEventGroupChat],
+  );
+
+  const postEventGroupWelcome = useCallback((conversationId: string, eventTitle: string) => {
+    const text = `La sortie « ${eventTitle} » est créée — discutez ici avec les participants.`;
+    const msg: Message = {
+      id: makeId('msg'),
+      conversationId,
+      text,
+      sentAt: Date.now(),
+      isOwn: false,
+      authorName: 'Système',
+    };
+    setMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationId]: [...(prev[conversationId] ?? []), msg],
+    }));
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conversationId
+          ? { ...c, lastMessagePreview: text.slice(0, 80), updatedAt: Date.now() }
+          : c,
+      ),
     );
   }, []);
 
@@ -337,8 +685,10 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     if (!trimmed && !media) return;
 
     const conv = conversations.find((c) => c.id === conversationId);
+    const isEventChat = events.some((e) => e.conversationId === conversationId);
     if (
       conv?.type === 'group' &&
+      !isEventChat &&
       !groupHasFriendForMessages(membersByConversation[conversationId] ?? [])
     ) {
       return;
@@ -367,15 +717,17 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
           : c,
       ),
     );
-  },
-    [conversations, membersByConversation],
+    },
+    [conversations, membersByConversation, events],
   );
 
   const demoSimulateIncomingMessage = useCallback(
     (conversationId: string) => {
       const conv = getConversation(conversationId);
+      const isEventChat = events.some((e) => e.conversationId === conversationId);
       if (
         conv?.type === 'group' &&
+        !isEventChat &&
         !groupHasFriendForMessages(membersByConversation[conversationId] ?? [])
       ) {
         return;
@@ -411,7 +763,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
         senderLabel: authorName,
       });
     },
-    [getConversation, getGroupSettings, membersByConversation],
+    [getConversation, getGroupSettings, membersByConversation, events],
   );
 
   const removeGroupMember = useCallback((conversationId: string, memberId: string) => {
@@ -492,6 +844,90 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     return id;
   }, []);
 
+  const ensureDirectConversationForProfile = useCallback(
+    (input: { profilId: string; displayTitle: string }) => {
+      const profilId = input.profilId.trim();
+      const displayTitle = input.displayTitle.trim() || 'Contact';
+      if (!profilId) return '';
+
+      for (const c of conversations) {
+        if (c.type !== 'direct') continue;
+        const members = membersByConversation[c.id];
+        if (members?.some((m) => !m.isSelf && m.profilId === profilId)) {
+          return c.id;
+        }
+      }
+
+      for (const c of conversations) {
+        if (c.type !== 'direct') continue;
+        const members = membersByConversation[c.id];
+        if ((!members || members.length === 0) && c.title === displayTitle) {
+          const cid = c.id;
+          const g = pickGradientForProfilId(profilId);
+          setMembersByConversation((prev) => {
+            const list = prev[cid];
+            if (list?.some((m) => m.profilId === profilId)) return prev;
+            return {
+              ...prev,
+              [cid]: [
+                {
+                  id: `${cid}-me`,
+                  displayName: 'Moi',
+                  isSelf: true,
+                  avatarGradient: ['#78909C', '#546E7A'],
+                },
+                {
+                  id: `${cid}-peer`,
+                  displayName: displayTitle,
+                  isSelf: false,
+                  avatarGradient: [g[0], g[1]],
+                  profilId,
+                  isFriendWithMe: true,
+                },
+              ],
+            };
+          });
+          return cid;
+        }
+      }
+
+      const id = makeId('dm');
+      const g = pickGradientForProfilId(profilId);
+      const conv: Conversation = {
+        id,
+        title: displayTitle,
+        type: 'direct',
+        lastMessagePreview: 'Nouvelle conversation',
+        updatedAt: Date.now(),
+        unreadCount: 0,
+        avatarGradient: [g[0], g[1]],
+      };
+      setConversations((prev) => [conv, ...prev]);
+      setMembersByConversation((prev) => ({
+        ...prev,
+        [id]: [
+          {
+            id: `${id}-me`,
+            displayName: 'Moi',
+            isSelf: true,
+            avatarGradient: ['#78909C', '#546E7A'],
+          },
+          {
+            id: `${id}-peer`,
+            displayName: displayTitle,
+            isSelf: false,
+            avatarGradient: [g[0], g[1]],
+            profilId,
+            isFriendWithMe: true,
+          },
+        ],
+      }));
+      setMessagesByConversation((prev) => ({ ...prev, [id]: [] }));
+      return id;
+    },
+    [conversations, membersByConversation],
+  );
+
   const addGroupMemberInvite = useCallback(
     (
       conversationId: string,
@@ -526,6 +962,8 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const leaveGroup = useCallback((conversationId: string) => {
+    userModifiedFavoritesRef.current = true;
+    setFavoriteConversationIds((prev) => prev.filter((id) => id !== conversationId));
     setConversations((prev) => prev.filter((c) => c.id !== conversationId));
     setMessagesByConversation((prev) => {
       const n = { ...prev };
@@ -547,7 +985,8 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(
     () => ({
-      favoriteConversationIds: seedFavoriteConversationIds,
+      favoriteConversationIds,
+      toggleConversationFavorite,
       conversations,
       getConversation,
       messagesByConversation,
@@ -560,6 +999,15 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       toggleEventFavorite,
       joinEvent,
       leaveEvent,
+      getViewerCardStatus,
+      approveJoinRequest,
+      rejectPendingJoinRequest,
+      removeEventParticipant,
+      postEventGroupWelcome,
+      getPendingApprovalCount,
+      getPendingJoinRequests,
+      getApprovedParticipantsExtra,
+      getRemovedSeedParticipantIds,
       messagesTabBadgeCount,
       visitesTabBadgeCount,
       getGroupMembers,
@@ -570,11 +1018,14 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       addGroupMember,
       addGroupMemberInvite,
       createEmptyGroup,
+      ensureDirectConversationForProfile,
       demoSimulateIncomingMessage,
       leaveGroup,
       cleanData,
     }),
     [
+      favoriteConversationIds,
+      toggleConversationFavorite,
       conversations,
       getConversation,
       messagesByConversation,
@@ -587,6 +1038,15 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       toggleEventFavorite,
       joinEvent,
       leaveEvent,
+      getViewerCardStatus,
+      approveJoinRequest,
+      rejectPendingJoinRequest,
+      removeEventParticipant,
+      postEventGroupWelcome,
+      getPendingApprovalCount,
+      getPendingJoinRequests,
+      getApprovedParticipantsExtra,
+      getRemovedSeedParticipantIds,
       messagesTabBadgeCount,
       visitesTabBadgeCount,
       getGroupMembers,
@@ -597,6 +1057,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       addGroupMember,
       addGroupMemberInvite,
       createEmptyGroup,
+      ensureDirectConversationForProfile,
       demoSimulateIncomingMessage,
       leaveGroup,
       cleanData,

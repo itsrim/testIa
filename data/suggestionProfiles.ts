@@ -9,11 +9,13 @@ export type SuggestionProfile = {
   verified: boolean;
   bio: string;
   memberSince: string;
+  /** Ville / région (CSV `suggestion_profiles`, colonne `city`). */
+  city: string;
   stats: { reliability: number; events: number; friends: number };
   badges: string[];
 };
 
-function capPseudo(pseudo: string): string {
+export function capPseudo(pseudo: string): string {
   const raw = pseudo.replace(/^@/, '');
   const base = raw.split(/[._-]/)[0] ?? raw;
   if (!base) return pseudo;
@@ -56,6 +58,7 @@ export function buildMemberFallbackProfile(input: {
     aspectRatio: 0.72,
     verified: h % 3 === 0,
     bio: 'Passionné(e) d’événements et de rencontres. Toujours partant(e) pour de nouveaux projets !',
+    city: '',
     memberSince: String(2019 + (h % 5)),
     stats: {
       reliability: Math.round((3.5 + (h % 15) / 10) * 10) / 10,

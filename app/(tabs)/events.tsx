@@ -296,14 +296,20 @@ function CalendarHeader({
 
 function EventCard({ item, onToggleFavorite }: { item: Event; onToggleFavorite: () => void }) {
   const router = useRouter();
+  const { getViewerCardStatus } = useMessaging();
+  const st = getViewerCardStatus(item);
 
   const statusEl =
-    item.cardStatus === 'inscrit' ? (
+    st === 'inscrit' ? (
       <View style={[styles.tag, styles.tagBlue]}>
         <Ionicons name="checkmark-circle" size={12} color="#fff" />
         <Text style={styles.tagTextInv}>Inscrit</Text>
       </View>
-    ) : item.cardStatus === 'organisateur' ? (
+    ) : st === 'en_attente' ? (
+      <View style={[styles.tag, styles.tagPending]}>
+        <Text style={styles.tagTextInv}>En attente</Text>
+      </View>
+    ) : st === 'organisateur' ? (
       <View style={[styles.tag, styles.tagPink]}>
         <Text style={styles.tagTextInv}>Organisateur</Text>
       </View>
@@ -828,6 +834,9 @@ const styles = StyleSheet.create({
   },
   tagPink: {
     backgroundColor: '#FF2D55',
+  },
+  tagPending: {
+    backgroundColor: '#F59E0B',
   },
   /** Badge « + S'inscrire » : fond bleu foncé (ref. maquette). */
   tagJoin: {
