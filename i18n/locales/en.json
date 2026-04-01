@@ -70,9 +70,21 @@
     "tabFriends": "Friends",
     "tabPast": "Past",
     "tabSettings": "Settings",
+    "closeSettings": "Close settings",
+    "tabNotifications": "Alerts",
+    "notificationsIntro": "Join requests for events you host that require manual approval. Tap a row to open the event.",
+    "notificationsEmpty": "No notifications yet.",
+    "notificationsMarkAllRead": "Mark all as read",
     "tabReports": "Reports",
     "reportsIntro": "Profiles reported by users. Hide an account to remove it from lists and profile screens for everyone.",
     "reportsEmpty": "No reports yet.",
+    "reportsEventsIntro": "Reported events (removal, capacity, edits…). Mark as done once you’ve handled it.",
+    "eventReportDismissCta": "Done",
+    "eventReportReason": {
+      "delete": "Removal requested",
+      "capacity": "Capacity / spots",
+      "other": "Other change (title, place, time…)"
+    },
     "reportsHideCta": "Hide for everyone",
     "reportsHiddenBadge": "Hidden globally",
     "reportsHideConfirmTitle": "Hide this profile?",
@@ -94,6 +106,8 @@
     "adminOnSubtitle": "Unlimited access to past dates",
     "adminOffSubtitle": "Standard user mode",
     "adminTitle": "Admin mode",
+    "betaEventsTitle": "Beta events in the agenda",
+    "betaEventsSubtitle": "Show events flagged as beta (admin only).",
     "language": "Language",
     "sectionParams": "Parameters",
     "maxParticipantsRow": "Max participants per event",
@@ -159,6 +173,23 @@
         "subtitle": "Event search is reserved for Premium users"
       }
     }
+  },
+  "eventDetail": {
+    "linkMenuTitle": "Share or report",
+    "shareLink": "Share link…",
+    "copyLink": "Copy link",
+    "reportToAdmin": "Report to an admin…",
+    "linkCopied": "Link copied to clipboard.",
+    "shareErrorTitle": "Could not share",
+    "shareErrorBody": "Try again or copy the link manually.",
+    "reportTitle": "Report this event",
+    "reportBody": "Admins can remove the event, adjust participant limits, or fix what’s shown.",
+    "reportReasonDelete": "Request removal",
+    "reportReasonCapacity": "Capacity or headcount",
+    "reportReasonOther": "Other change (title, place, date…)",
+    "reportSentTitle": "Report sent",
+    "reportSentBody": "Thanks — the team will review it.",
+    "shareMenuA11y": "Share link, copy, or report this event"
   },
   "moderation": {
     "reportAccessibility": "Report an issue with this profile",

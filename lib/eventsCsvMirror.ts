@@ -34,6 +34,7 @@ const HEADERS = [
   'createdAtMs',
   'hideAddress',
   'manualApproval',
+  'isBeta',
 ] as const;
 
 export function serializeEventsCsvMirror(events: Event[]): string {
@@ -60,6 +61,7 @@ export function serializeEventsCsvMirror(events: Event[]): string {
       String(e.createdAt),
       e.hideAddress === true ? '1' : '',
       e.manualApproval === true ? '1' : '',
+      e.isBeta === true ? '1' : '',
     ];
   });
   return buildCsv([...HEADERS], rows);
@@ -97,6 +99,7 @@ export function parseEventsCsvMirror(csv: string): Event[] {
     if (notes) e.notes = notes;
     if (r.hideAddress === '1') e.hideAddress = true;
     if (r.manualApproval === '1') e.manualApproval = true;
+    if (r.isBeta === '1') e.isBeta = true;
     return e;
   });
 }

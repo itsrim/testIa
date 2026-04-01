@@ -1,4 +1,5 @@
 import type { Event } from '@/types/messaging';
+import { capPseudo, getSuggestionProfile } from '@/data/suggestionProfiles';
 
 export type EventParticipantDetail = {
   id: string;
@@ -7,6 +8,8 @@ export type EventParticipantDetail = {
   rating: number;
   isOrganizer: boolean;
   isSelf: boolean;
+  /** `suggestion_profiles` (sg*, ep*) — ouvre l’écran profil. */
+  profilId?: string;
 };
 
 export type EventWaitingMember = {
@@ -16,6 +19,7 @@ export type EventWaitingMember = {
   avatarUrl?: string;
   /** Demande d’inscription de l’utilisateur courant (annulation / validation). */
   isViewerRequest?: boolean;
+  profilId?: string;
 };
 
 export type EventDetailRich = {
@@ -39,6 +43,30 @@ export function sortEventParticipants(list: EventParticipantDetail[]): EventPart
   });
 }
 
+export function enrichParticipantRow(p: EventParticipantDetail): EventParticipantDetail {
+  if (!p.profilId || p.isSelf) return p;
+  const s = getSuggestionProfile(p.profilId);
+  if (!s) return p;
+  return {
+    ...p,
+    displayName: capPseudo(s.pseudo),
+    avatarUrl: s.imageUrl,
+    rating: s.stats.reliability,
+  };
+}
+
+export function enrichWaitingRow(w: EventWaitingMember): EventWaitingMember {
+  if (!w.profilId || w.isViewerRequest) return w;
+  const s = getSuggestionProfile(w.profilId);
+  if (!s) return w;
+  return {
+    ...w,
+    displayName: capPseudo(s.pseudo),
+    avatarUrl: s.imageUrl,
+    rating: s.stats.reliability,
+  };
+}
+
 /** Détail riche par id d’événement (`events.csv`) — noms alignés sur `group_members.csv`. */
 export const EVENT_DETAIL_SEED: Record<string, EventDetailRich> = {
   e3: {
@@ -47,110 +75,10 @@ export const EVENT_DETAIL_SEED: Record<string, EventDetailRich> = {
       'Chaussures plates conseillées ; on termine vers une terrasse couverte si pluie.',
     ],
     participants: [
-      { id: 'p1', displayName: 'Léo', avatarUrl: av('Leo', '7E57C2'), rating: 4.7, isOrganizer: true, isSelf: false },
-      { id: 'p2', displayName: 'Camille', avatarUrl: av('Camille', 'FF7043'), rating: 4.4, isOrganizer: false, isSelf: false },
+      { id: 'p1', displayName: 'Léo', avatarUrl: av('Leo', '7E57C2'), rating: 4.7, isOrganizer: true, isSelf: false, profilId: 'ep1' },
+      { id: 'p2', displayName: 'Camille', avatarUrl: av('Camille', 'FF7043'), rating: 4.4, isOrganizer: false, isSelf: false, profilId: 'ep2' },
       { id: 'p3', displayName: 'Moi', avatarUrl: av('Moi', '78909C'), rating: 4.4, isOrganizer: false, isSelf: true },
-      { id: 'p4', displayName: 'Hugo', avatarUrl: av('Hugo', '29B6F6'), rating: 4.6, isOrganizer: false, isSelf: false },
-    ],
-    waitingList: [],
-    showRemoveOtherParticipants: false,
-  },
-  e10: {
-    descriptionParagraphs: [
-      'Sortie neige légère côté Givrine : raquettes optionnelles selon météo.',
-      'Covoiturage depuis Nyon — précisez vos places dans le fil ; départ groupé 8h.',
-    ],
-    participants: [
-      { id: 'p1', displayName: 'Léa', avatarUrl: av('Lea', 'EC407A'), rating: 4.6, isOrganizer: true, isSelf: false },
-      { id: 'p2', displayName: 'Antoine', avatarUrl: av('Antoine', '5C6BC0'), rating: 4.3, isOrganizer: false, isSelf: false },
-      { id: 'p3', displayName: 'Moi', avatarUrl: av('Moi', '78909C'), rating: 4.5, isOrganizer: false, isSelf: true },
-      { id: 'p4', displayName: 'Inès', avatarUrl: av('Ines', '26A69A'), rating: 4.8, isOrganizer: false, isSelf: false },
-      { id: 'p5', displayName: 'Kevin', avatarUrl: av('Kevin', 'FFA726'), rating: 4.1, isOrganizer: false, isSelf: false },
-    ],
-    waitingList: [],
-    showRemoveOtherParticipants: false,
-  },
-  e13: {
-    descriptionParagraphs: [
-      'Itinéraire patrimoine : Molard, courbes de l’Escalade, ruelles, pause café rue Perron.',
-      'Tenue décontractée ; le groupe attend 5 min max à chaque étape.',
-    ],
-    participants: [
-      { id: 'p1', displayName: 'Hugo', avatarUrl: av('Hugo', '29B6F6'), rating: 4.5, isOrganizer: false, isSelf: false },
-      { id: 'p2', displayName: 'Léo', avatarUrl: av('Leo', '7E57C2'), rating: 4.7, isOrganizer: true, isSelf: false },
-      { id: 'p3', displayName: 'Moi', avatarUrl: av('Moi', '78909C'), rating: 4.4, isOrganizer: false, isSelf: true },
-      { id: 'p4', displayName: 'Camille', avatarUrl: av('Camille', 'FF7043'), rating: 4.3, isOrganizer: false, isSelf: false },
-    ],
-    waitingList: [],
-    showRemoveOtherParticipants: false,
-  },
-  e15: {
-    descriptionParagraphs: [
-      'Boucle Voiron / Saint-Aupre : dénivelé modéré, picnic en crêt si météo sèche.',
-      'RDV 8h Cornavin : on valide le nombre de voitures la veille dans ce fil.',
-    ],
-    participants: [
-      { id: 'p1', displayName: 'Antoine', avatarUrl: av('Antoine', '5C6BC0'), rating: 4.5, isOrganizer: true, isSelf: false },
-      { id: 'p2', displayName: 'Moi', avatarUrl: av('Moi', '78909C'), rating: 4.5, isOrganizer: false, isSelf: true },
-      { id: 'p3', displayName: 'Inès', avatarUrl: av('Ines', '26A69A'), rating: 4.8, isOrganizer: false, isSelf: false },
-      { id: 'p4', displayName: 'Kevin', avatarUrl: av('Kevin', 'FFA726'), rating: 4.2, isOrganizer: false, isSelf: false },
-      { id: 'p5', displayName: 'Léa', avatarUrl: av('Lea', 'EC407A'), rating: 4.6, isOrganizer: false, isSelf: false },
-    ],
-    waitingList: [],
-    showRemoveOtherParticipants: false,
-  },
-  e17: {
-    descriptionParagraphs: [
-      'Escape « Laboratoire » — 60 min, deux salles côte à côte si nous sommes 8+.',
-      'Tu es co-organisateur·rice : tu peux ajuster la liste avant jeudi minuit.',
-    ],
-    participants: [
-      {
-        id: 'p1',
-        displayName: 'Moi',
-        avatarUrl: av('Moi', 'AB47BC'),
-        rating: 4.8,
-        isOrganizer: true,
-        isSelf: true,
-      },
-      { id: 'p2', displayName: 'Sam', avatarUrl: av('Sam', '7E57C2'), rating: 4.7, isOrganizer: true, isSelf: false },
-      { id: 'p3', displayName: 'Alex', avatarUrl: av('Alex', '26C6DA'), rating: 4.2, isOrganizer: false, isSelf: false },
-      { id: 'p4', displayName: 'Julie', avatarUrl: av('Julie', 'EC407A'), rating: 4.4, isOrganizer: false, isSelf: false },
-    ],
-    waitingList: [
-      { id: 'w1', displayName: 'Marc', rating: 4.0, avatarUrl: av('Marc', '616161') },
-      { id: 'w2', displayName: 'Clara', rating: 4.5, avatarUrl: av('Clara', 'EC407A') },
-    ],
-    showRemoveOtherParticipants: true,
-  },
-  /** Sortie démo : validation manuelle + participants alignés sur le groupe c2 (Rando Dimanche). */
-  e21: {
-    descriptionParagraphs: [
-      'Randonnée démo : file d’attente et retraits pour tester l’organisateur.',
-      'Les membres listés correspondent au groupe « Rando Dimanche » (CSV).',
-    ],
-    participants: [
-      { id: 'p-l', displayName: 'Léa', avatarUrl: av('Lea', 'EC407A'), rating: 4.6, isOrganizer: true, isSelf: false },
-      { id: 'p-a', displayName: 'Antoine', avatarUrl: av('Antoine', '5C6BC0'), rating: 4.3, isOrganizer: false, isSelf: false },
-      { id: 'p-me', displayName: 'Moi', avatarUrl: av('Moi', '78909C'), rating: 4.5, isOrganizer: false, isSelf: true },
-      { id: 'p-i', displayName: 'Inès', avatarUrl: av('Ines', '26A69A'), rating: 4.8, isOrganizer: false, isSelf: false },
-      { id: 'p-k', displayName: 'Kevin', avatarUrl: av('Kevin', 'FFA726'), rating: 4.1, isOrganizer: false, isSelf: false },
-    ],
-    waitingList: [
-      { id: 'w-e21a', displayName: 'Hugo', rating: 4.5, avatarUrl: av('Hugo', '29B6F6') },
-      { id: 'w-e21b', displayName: 'Camille', rating: 4.3, avatarUrl: av('Camille', 'FF7043') },
-    ],
-    showRemoveOtherParticipants: true,
-  },
-  e20: {
-    descriptionParagraphs: [
-      'Clôture trimestre Team Pastel : tapas partagées, bilan léger et vacances à planifier.',
-      'Précisez allergies / végé dans le fil ; terrasse couverte réservée.',
-    ],
-    participants: [
-      { id: 'p1', displayName: 'Sam', avatarUrl: av('Sam', '7E57C2'), rating: 4.9, isOrganizer: true, isSelf: false },
-      { id: 'p2', displayName: 'Alex', avatarUrl: av('Alex', '26C6DA'), rating: 4.3, isOrganizer: false, isSelf: false },
-      { id: 'p3', displayName: 'Moi', avatarUrl: av('Moi', '78909C'), rating: 4.5, isOrganizer: false, isSelf: true },
+      { id: 'p4', displayName: 'Hugo', avatarUrl: av('Hugo', '29B6F6'), rating: 4.6, isOrganizer: false, isSelf: false, profilId: 'sg4' },
     ],
     waitingList: [],
     showRemoveOtherParticipants: false,
@@ -177,11 +105,15 @@ function defaultRich(event: Event): EventDetailRich {
     ];
     const extra = Math.max(0, event.participantCount - 1);
     for (let i = 0; i < extra; i++) {
+      const pi = (i % 24) + 1;
+      const pid = `ep${pi}`;
+      const prof = getSuggestionProfile(pid);
       participants.push({
         id: `guest-${i}`,
-        displayName: `Invité ${i + 1}`,
-        avatarUrl: av(`Inv${i + 1}`, '5C6BC0'),
-        rating: 4.2,
+        profilId: pid,
+        displayName: prof ? capPseudo(prof.pseudo) : `Invité ${i + 1}`,
+        avatarUrl: prof?.imageUrl ?? av(`Inv${i + 1}`, '5C6BC0'),
+        rating: prof?.stats.reliability ?? 4.2,
         isOrganizer: false,
         isSelf: false,
       });
@@ -209,6 +141,22 @@ export function getInitialPendingQueuesByEvent(): Record<string, EventWaitingMem
       out[eid] = rich.waitingList.map((w) => ({ ...w }));
     }
   }
+  out.q20260301a = [
+    {
+      id: 'w-demo-1',
+      displayName: 'Marc',
+      rating: 4.0,
+      avatarUrl: av('Marc', '616161'),
+      profilId: 'ep8',
+    },
+    {
+      id: 'w-demo-2',
+      displayName: 'Clara',
+      rating: 4.5,
+      avatarUrl: av('Clara', 'EC407A'),
+      profilId: 'sg1',
+    },
+  ];
   return out;
 }
 
@@ -230,6 +178,8 @@ export function getEventDetailRich(event: Event): EventDetailRich {
       },
     ];
   }
+
+  participants = participants.map(enrichParticipantRow);
 
   return { ...base, participants, waitingList: [] };
 }

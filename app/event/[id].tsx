@@ -1,20 +1,30 @@
 import { Design } from '@/constants/design';
+import { useModeration } from '@/context/ModerationContext';
 import { useMessaging } from '@/context/MessagingContext';
+import { useProfileSettings } from '@/context/ProfileSettingsContext';
 import {
+  enrichParticipantRow,
+  enrichWaitingRow,
   getEventDetailRich,
   sortEventParticipants,
   type EventParticipantDetail,
   type EventWaitingMember,
 } from '@/data/eventDetailSeed';
+import { getSuggestionProfile } from '@/data/suggestionProfiles';
+import { expandParticipantsToEventCount } from '@/lib/eventParticipantDisplay';
+import * as Clipboard from 'expo-clipboard';
 import { Image } from 'expo-image';
+import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Dimensions,
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -72,10 +82,12 @@ function confirmRetrait(message: string, onConfirm: () => void) {
 }
 
 export default function EventDetailScreen() {
+  const { t } = useTranslation();
   const raw = useLocalSearchParams<{ id: string }>();
   const eventId = Array.isArray(raw.id) ? raw.id[0] : raw.id;
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { submitEventReport } = useModeration();
   const {
     getEventById,
     getConversation,
@@ -83,14 +95,14 @@ export default function EventDetailScreen() {
     leaveEvent,
     toggleEventFavorite,
     getViewerCardStatus,
-    approveJoinRequest,
-    getPendingApprovalCount,
+    approvePendingMember,
     getPendingJoinRequests,
     getApprovedParticipantsExtra,
     getRemovedSeedParticipantIds,
     rejectPendingJoinRequest,
     removeEventParticipant,
   } = useMessaging();
+  const { publishBetaEvents, isAdmin } = useProfileSettings();
 
   const event = eventId ? getEventById(eventId) : undefined;
   const rich = useMemo(() => {
@@ -99,8 +111,14 @@ export default function EventDetailScreen() {
     const removed = getRemovedSeedParticipantIds(event.id);
     const extras = getApprovedParticipantsExtra(event.id);
     const seedParts = base.participants.filter((p) => !removed.has(p.id));
-    const participants = sortEventParticipants([...seedParts, ...extras]);
-    const waitingList = getPendingJoinRequests(event.id);
+    const merged = sortEventParticipants([...seedParts, ...extras]);
+    const mergedEnriched = merged.map(enrichParticipantRow);
+    const participants = expandParticipantsToEventCount(
+      mergedEnriched,
+      event.participantCount,
+      event.id,
+    );
+    const waitingList = getPendingJoinRequests(event.id).map(enrichWaitingRow);
     return { ...base, participants, waitingList };
   }, [
     event,
@@ -108,6 +126,110 @@ export default function EventDetailScreen() {
     getApprovedParticipantsExtra,
     getRemovedSeedParticipantIds,
   ]);
+
+  const openParticipantProfile = useCallback(
+    (p: EventParticipantDetail) => {
+      if (p.isSelf) {
+        router.push('/(tabs)/profile');
+        return;
+      }
+      const pid = p.profilId;
+      if (!pid || !getSuggestionProfile(pid)) return;
+      router.push({ pathname: '/profil/[id]', params: { id: pid } });
+    },
+    [router],
+  );
+
+  const openWaitingProfile = useCallback(
+    (w: EventWaitingMember) => {
+      if (w.isViewerRequest) {
+        router.push('/(tabs)/profile');
+        return;
+      }
+      const pid = w.profilId;
+      if (!pid || !getSuggestionProfile(pid)) return;
+      router.push({ pathname: '/profil/[id]', params: { id: pid } });
+    },
+    [router],
+  );
+
+  const openEventActions = useCallback(() => {
+    if (!event) return;
+    const url = Linking.createURL(`/event/${event.id}`);
+    const eventTitle = event.title;
+
+    const showReportReasons = () => {
+      Alert.alert(t('eventDetail.reportTitle'), t('eventDetail.reportBody'), [
+        {
+          text: t('eventDetail.reportReasonDelete'),
+          onPress: () => {
+            submitEventReport({
+              eventId: event.id,
+              eventTitle,
+              reasonKey: 'delete',
+            });
+            Alert.alert(t('eventDetail.reportSentTitle'), t('eventDetail.reportSentBody'));
+          },
+        },
+        {
+          text: t('eventDetail.reportReasonCapacity'),
+          onPress: () => {
+            submitEventReport({
+              eventId: event.id,
+              eventTitle,
+              reasonKey: 'capacity',
+            });
+            Alert.alert(t('eventDetail.reportSentTitle'), t('eventDetail.reportSentBody'));
+          },
+        },
+        {
+          text: t('eventDetail.reportReasonOther'),
+          onPress: () => {
+            submitEventReport({
+              eventId: event.id,
+              eventTitle,
+              reasonKey: 'other',
+            });
+            Alert.alert(t('eventDetail.reportSentTitle'), t('eventDetail.reportSentBody'));
+          },
+        },
+        { text: t('profile.cancel'), style: 'cancel' },
+      ]);
+    };
+
+    Alert.alert(t('eventDetail.linkMenuTitle'), undefined, [
+      {
+        text: t('eventDetail.shareLink'),
+        onPress: () => {
+          void (async () => {
+            try {
+              await Share.share(
+                Platform.OS === 'ios'
+                  ? { url, title: eventTitle, message: eventTitle }
+                  : { message: `${eventTitle}\n${url}`, title: eventTitle },
+              );
+            } catch {
+              Alert.alert(t('eventDetail.shareErrorTitle'), t('eventDetail.shareErrorBody'));
+            }
+          })();
+        },
+      },
+      {
+        text: t('eventDetail.copyLink'),
+        onPress: () => {
+          void (async () => {
+            await Clipboard.setStringAsync(url);
+            Alert.alert('', t('eventDetail.linkCopied'));
+          })();
+        },
+      },
+      {
+        text: t('eventDetail.reportToAdmin'),
+        onPress: showReportReasons,
+      },
+      { text: t('profile.cancel'), style: 'cancel' },
+    ]);
+  }, [event, t, submitEventReport]);
 
   const viewerStatus = useMemo(
     () => (event ? getViewerCardStatus(event) : undefined),
@@ -126,14 +248,6 @@ export default function EventDetailScreen() {
     () => viewerStatus === 'join' && !isFull,
     [viewerStatus, isFull],
   );
-
-  const pendingCount = event ? getPendingApprovalCount(event.id) : 0;
-  const canApproveJoin =
-    !!event &&
-    event.manualApproval &&
-    viewerStatus === 'organisateur' &&
-    pendingCount > 0 &&
-    !isFull;
 
   const canOpenEventChat =
     viewerStatus === 'inscrit' || viewerStatus === 'organisateur';
@@ -164,10 +278,13 @@ export default function EventDetailScreen() {
     leaveEvent(event.id);
   }, [event, leaveEvent]);
 
-  const onApproveJoin = useCallback(() => {
-    if (!event || !canApproveJoin) return;
-    approveJoinRequest(event.id);
-  }, [event, canApproveJoin, approveJoinRequest]);
+  const onApproveWaitingMember = useCallback(
+    (requestId: string) => {
+      if (!event || viewerStatus !== 'organisateur' || isFull) return;
+      approvePendingMember(event.id, requestId);
+    },
+    [event, viewerStatus, isFull, approvePendingMember],
+  );
 
   if (!event || !rich) {
     return (
@@ -247,10 +364,11 @@ export default function EventDetailScreen() {
           </Pressable>
           <View style={[styles.headerActions, { top: insets.top + 8 }]}>
             <Pressable
-              onPress={() => Alert.alert('Partager', 'Lien partagé !')}
+              onPress={openEventActions}
               style={styles.backBtnInner}
               hitSlop={12}
-            >
+              accessibilityRole="button"
+              accessibilityLabel={t('eventDetail.shareMenuA11y')}>
               <Ionicons name="share-social-outline" size={22} color="#fff" />
             </Pressable>
             <Pressable
@@ -269,6 +387,15 @@ export default function EventDetailScreen() {
 
         <View style={[styles.sheet, { marginTop: -CARD_RADIUS }]}>
           <Text style={styles.title}>{event.title}</Text>
+          {event.isBeta ? (
+            <View style={styles.betaBanner}>
+              <Ionicons name="flask" size={14} color="#F9A8D4" />
+              <Text style={styles.betaBannerText}>Sortie bêta</Text>
+              {!publishBetaEvents && isAdmin ? (
+                <Text style={styles.betaBannerHint}> — masquée dans l&apos;agenda</Text>
+              ) : null}
+            </View>
+          ) : null}
 
           <View style={styles.subHeaderRow}>
             <Text style={styles.subHeaderMuted}>{priceSub}</Text>
@@ -292,44 +419,43 @@ export default function EventDetailScreen() {
             </Text>
           ))}
 
-          {rich.participants.length > 0 ? (
+          {event.participantCount > 0 ? (
             <View style={styles.block}>
               <View style={styles.blockHeader}>
                 <Text style={styles.blockTitle}>
                   Participants ({event.participantCount}/{event.participantMax})
                 </Text>
-                <Pressable
-                  onPress={() =>
-                    Alert.alert(
-                      'Participants',
-                      `Total : ${event.participantCount} sur ${event.participantMax} (démo).`,
-                    )
-                  }
-                  hitSlop={8}>
-                  <Text style={styles.seeAll}>Voir tout</Text>
-                </Pressable>
               </View>
               {rich.participants.map((p) => (
                 <View key={p.id} style={styles.participantRow}>
-                  <Image source={{ uri: p.avatarUrl }} style={styles.participantAv} contentFit="cover" />
-                  <View style={styles.participantCol}>
-                    <View style={styles.participantNameRow}>
-                      <Text style={styles.participantName} numberOfLines={1}>
-                        {participantLabel(p)}
-                      </Text>
-                      {p.isSelf ? (
-                        <View style={styles.vousBadge}>
-                          <Text style={styles.vousBadgeText}>VOUS</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <View style={styles.ratingRow}>
-                      <View style={styles.ratingBarWrap}>
-                        <RatingBar value={p.rating} />
+                  <Pressable
+                    style={styles.participantRowMain}
+                    onPress={() => openParticipantProfile(p)}
+                    disabled={!p.isSelf && !p.profilId}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      p.isSelf ? 'Mon profil' : `Voir le profil de ${participantLabel(p)}`
+                    }>
+                    <Image source={{ uri: p.avatarUrl }} style={styles.participantAv} contentFit="cover" />
+                    <View style={styles.participantCol}>
+                      <View style={styles.participantNameRow}>
+                        <Text style={styles.participantName} numberOfLines={1}>
+                          {participantLabel(p)}
+                        </Text>
+                        {p.isSelf ? (
+                          <View style={styles.vousBadge}>
+                            <Text style={styles.vousBadgeText}>VOUS</Text>
+                          </View>
+                        ) : null}
                       </View>
-                      <Text style={styles.ratingNum}>{p.rating.toFixed(1)}</Text>
+                      <View style={styles.ratingRow}>
+                        <View style={styles.ratingBarWrap}>
+                          <RatingBar value={p.rating} />
+                        </View>
+                        <Text style={styles.ratingNum}>{p.rating.toFixed(1)}</Text>
+                      </View>
                     </View>
-                  </View>
+                  </Pressable>
                   {rich.showRemoveOtherParticipants && !p.isSelf && !p.isOrganizer ? (
                     <Pressable
                       style={styles.removeBtn}
@@ -353,56 +479,69 @@ export default function EventDetailScreen() {
             </View>
           ) : null}
 
-          {canApproveJoin ? (
-            <View style={styles.approveBanner}>
-              <Text style={styles.approveBannerText}>
-                {pendingCount} demande{pendingCount > 1 ? 's' : ''} d&apos;inscription à valider
-              </Text>
-              <Pressable onPress={onApproveJoin} style={styles.approveBtn}>
-                <Text style={styles.approveBtnText}>Accepter l&apos;inscription (accès au chat)</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
           {rich.waitingList.length > 0 ? (
             <View style={styles.block}>
               <Text style={styles.waitingTitle}>
-                ⌛ Liste d&apos;attente — à valider ({rich.waitingList.length})
+                ⌛ Liste d&apos;attente ({rich.waitingList.length}) — places restantes :{' '}
+                {Math.max(0, event.participantMax - event.participantCount)}
               </Text>
               {rich.waitingList.map((w: EventWaitingMember) => (
                 <View key={w.id} style={styles.participantRow}>
-                  <Image
-                    source={{
-                      uri:
-                        w.avatarUrl ??
-                        `https://ui-avatars.com/api/?name=${encodeURIComponent(w.displayName)}&size=128&background=555&color=aaa`,
-                    }}
-                    style={[styles.participantAv, styles.waitingAv]}
-                    contentFit="cover"
-                  />
-                  <View style={styles.participantCol}>
-                    <Text style={styles.participantName}>{w.displayName}</Text>
-                    <View style={styles.ratingRow}>
-                      <View style={styles.ratingBarWrap}>
-                        <RatingBar value={w.rating} />
+                  <Pressable
+                    style={styles.participantRowMain}
+                    onPress={() => openWaitingProfile(w)}
+                    disabled={!w.isViewerRequest && !w.profilId}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      w.isViewerRequest ? 'Mon profil' : `Voir le profil de ${w.displayName}`
+                    }>
+                    <Image
+                      source={{
+                        uri:
+                          w.avatarUrl ??
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(w.displayName)}&size=128&background=555&color=aaa`,
+                      }}
+                      style={[styles.participantAv, styles.waitingAv]}
+                      contentFit="cover"
+                    />
+                    <View style={styles.participantCol}>
+                      <Text style={styles.participantName}>{w.displayName}</Text>
+                      <View style={styles.ratingRow}>
+                        <View style={styles.ratingBarWrap}>
+                          <RatingBar value={w.rating} />
+                        </View>
+                        <Text style={styles.ratingNum}>{w.rating.toFixed(1)}</Text>
                       </View>
-                      <Text style={styles.ratingNum}>{w.rating.toFixed(1)}</Text>
                     </View>
-                  </View>
+                  </Pressable>
                   {viewerStatus === 'organisateur' ? (
-                    <Pressable
-                      style={styles.removeBtn}
-                      onPress={() =>
-                        confirmRetrait(
-                          `Refuser / retirer la demande de ${w.displayName} ?`,
-                          () => rejectPendingJoinRequest(event.id, w.id),
-                        )
-                      }
-                      hitSlop={8}
-                      accessibilityLabel={`Retirer ${w.displayName} de la file`}
-                      accessibilityRole="button">
-                      <Ionicons name="trash-outline" size={22} color="#FF453A" />
-                    </Pressable>
+                    <View style={styles.waitingActions}>
+                      {!isFull ? (
+                        <Pressable
+                          style={styles.approveIconBtn}
+                          onPress={() => onApproveWaitingMember(w.id)}
+                          hitSlop={8}
+                          accessibilityLabel={`Accepter ${w.displayName}`}
+                          accessibilityRole="button">
+                          <Ionicons name="checkmark-circle" size={26} color="#34C759" />
+                        </Pressable>
+                      ) : (
+                        <View style={styles.removePlaceholder} />
+                      )}
+                      <Pressable
+                        style={styles.removeBtn}
+                        onPress={() =>
+                          confirmRetrait(
+                            `Refuser / retirer la demande de ${w.displayName} ?`,
+                            () => rejectPendingJoinRequest(event.id, w.id),
+                          )
+                        }
+                        hitSlop={8}
+                        accessibilityLabel={`Retirer ${w.displayName} de la file`}
+                        accessibilityRole="button">
+                        <Ionicons name="trash-outline" size={22} color="#FF453A" />
+                      </Pressable>
+                    </View>
                   ) : (
                     <View style={styles.removePlaceholder} />
                   )}
@@ -517,8 +656,31 @@ const styles = StyleSheet.create({
     color: Design.textPrimary,
     fontSize: 26,
     fontWeight: '800',
-    marginBottom: 12,
+    marginBottom: 8,
     letterSpacing: -0.3,
+  },
+  betaBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(236,72,153,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(236,72,153,0.35)',
+  },
+  betaBannerText: {
+    color: '#F9A8D4',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  betaBannerHint: {
+    color: Design.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
   },
   subHeaderRow: {
     flexDirection: 'row',
@@ -553,9 +715,6 @@ const styles = StyleSheet.create({
     marginTop: 28,
   },
   blockHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 14,
   },
   blockTitle: {
@@ -563,10 +722,18 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
   },
-  seeAll: {
-    color: '#5AC8FA',
-    fontSize: 15,
-    fontWeight: '700',
+  waitingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  approveIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(52,199,89,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   waitingTitle: {
     color: Design.textSecondary,
@@ -579,6 +746,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 14,
     gap: 12,
+  },
+  participantRowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minWidth: 0,
   },
   participantAv: {
     width: 48,
@@ -766,31 +940,6 @@ const styles = StyleSheet.create({
   },
   actionBtnTextActive: {
     color: '#fff',
-  },
-  approveBanner: {
-    marginTop: 20,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(52,199,89,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(52,199,89,0.35)',
-  },
-  approveBannerText: {
-    color: Design.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-  approveBtn: {
-    backgroundColor: '#34C759',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  approveBtnText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '800',
   },
   actionBtnLeave: {
     borderColor: 'rgba(255,69,58,0.55)',

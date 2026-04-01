@@ -278,6 +278,11 @@ export type SessionProfileSettingsState = {
   restrictions: Record<RestrictionKey, boolean>;
   /** Si true : ne plus afficher automatiquement le questionnaire quotidien. */
   hideDailyQuestionnaire: boolean;
+  /**
+   * Admin : si false, les sorties marquées bêta (`isBeta`) sont retirées de l’agenda.
+   * Défaut true (tout afficher).
+   */
+  publishBetaEvents: boolean;
 };
 
 /** GET /settings/limits — depuis CSV. */
@@ -298,7 +303,15 @@ export async function getSessionProfileSettings(): Promise<SessionProfileSetting
         : { ...DEFAULT_RESTRICTIONS };
     const hideDailyQuestionnaire =
       typeof p.hideDailyQuestionnaire === 'boolean' ? p.hideDailyQuestionnaire : false;
-    return { isPremium: p.isPremium, isAdmin: p.isAdmin, restrictions, hideDailyQuestionnaire };
+    const publishBetaEvents =
+      typeof p.publishBetaEvents === 'boolean' ? p.publishBetaEvents : true;
+    return {
+      isPremium: p.isPremium,
+      isAdmin: p.isAdmin,
+      restrictions,
+      hideDailyQuestionnaire,
+      publishBetaEvents,
+    };
   } catch {
     return null;
   }
@@ -321,6 +334,7 @@ export function seedSessionProfileSettingsFromCsv(): SessionProfileSettingsState
     isAdmin: profileMe.isAdminSeed,
     restrictions: { ...DEFAULT_RESTRICTIONS },
     hideDailyQuestionnaire: false,
+    publishBetaEvents: true,
   };
 }
 

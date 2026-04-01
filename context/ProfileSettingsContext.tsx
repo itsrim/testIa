@@ -29,6 +29,10 @@ type ProfileSettingsValue = {
   hideDailyQuestionnaire: boolean;
   setHideDailyQuestionnaire: (v: boolean) => void;
   toggleHideDailyQuestionnaire: () => void;
+  /** Admin : publier les sorties marquées bêta dans l’agenda. */
+  publishBetaEvents: boolean;
+  setPublishBetaEvents: (v: boolean) => void;
+  togglePublishBetaEvents: () => void;
   getLimits: () => TierLimits;
   isRestricted: (key: RestrictionKey) => boolean;
   restrictions: Record<RestrictionKey, boolean>;
@@ -44,6 +48,7 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
   const [isPremium, setPremium] = useState(seed.isPremium);
   const [isAdmin, setAdmin] = useState(seed.isAdmin);
   const [hideDailyQuestionnaire, setHideDailyQuestionnaire] = useState(seed.hideDailyQuestionnaire);
+  const [publishBetaEvents, setPublishBetaEvents] = useState(seed.publishBetaEvents);
   const [restrictions, setRestrictions] = useState<Record<RestrictionKey, boolean>>({
     ...seed.restrictions,
   });
@@ -59,6 +64,7 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
           setPremium(stored.isPremium);
           setAdmin(stored.isAdmin);
           setHideDailyQuestionnaire(stored.hideDailyQuestionnaire);
+          setPublishBetaEvents(stored.publishBetaEvents);
           setRestrictions(stored.restrictions);
         }
       } finally {
@@ -77,9 +83,10 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
       isAdmin,
       restrictions,
       hideDailyQuestionnaire,
+      publishBetaEvents,
     };
     void putSessionProfileSettings(payload);
-  }, [isPremium, isAdmin, restrictions, hideDailyQuestionnaire, settingsHydrated]);
+  }, [isPremium, isAdmin, restrictions, hideDailyQuestionnaire, publishBetaEvents, settingsHydrated]);
 
   const getLimits = useCallback((): TierLimits => {
     return isPremium ? limitsByTier.premium : limitsByTier.free;
@@ -101,6 +108,8 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
     [],
   );
 
+  const togglePublishBetaEvents = useCallback(() => setPublishBetaEvents((p) => !p), []);
+
   const toggleRestriction = useCallback((key: RestrictionKey) => {
     setRestrictions((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
@@ -110,6 +119,7 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
     setPremium(n.isPremium);
     setAdmin(n.isAdmin);
     setHideDailyQuestionnaire(n.hideDailyQuestionnaire);
+    setPublishBetaEvents(n.publishBetaEvents);
     setRestrictions(n.restrictions);
     void deleteSessionProfileSettings();
   }, []);
@@ -125,6 +135,9 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
       hideDailyQuestionnaire,
       setHideDailyQuestionnaire,
       toggleHideDailyQuestionnaire,
+      publishBetaEvents,
+      setPublishBetaEvents,
+      togglePublishBetaEvents,
       getLimits,
       isRestricted,
       restrictions,
@@ -139,6 +152,8 @@ export function ProfileSettingsProvider({ children }: { children: React.ReactNod
       toggleAdmin,
       hideDailyQuestionnaire,
       toggleHideDailyQuestionnaire,
+      publishBetaEvents,
+      togglePublishBetaEvents,
       getLimits,
       isRestricted,
       restrictions,

@@ -75,7 +75,7 @@ export default function CreateEventScreen() {
     return id?.trim() ? id.trim() : undefined;
   }, [rawParams.conversationId]);
   const { addEvent, events, createEmptyGroup, postEventGroupWelcome, getConversation } = useMessaging();
-  const { getLimits, isPremium, isRestricted } = useProfileSettings();
+  const { getLimits, isPremium, isRestricted, isAdmin } = useProfileSettings();
 
   const [title, setTitle] = useState('');
   const titleSeededRef = useRef(false);
@@ -118,6 +118,7 @@ export default function CreateEventScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [hideAddress, setHideAddress] = useState(false);
   const [manualApproval, setManualApproval] = useState(false);
+  const [markAsBeta, setMarkAsBeta] = useState(false);
 
   const bumpMax = useCallback(
     (delta: number) => {
@@ -218,6 +219,7 @@ export default function CreateEventScreen() {
       cardStatus: 'organisateur',
       hideAddress,
       manualApproval,
+      isBeta: isAdmin && markAsBeta,
     });
     postEventGroupWelcome(targetConversationId, t);
     router.back();
@@ -428,7 +430,7 @@ export default function CreateEventScreen() {
               <View style={[styles.optionRow, styles.cardRowBorder]}>
                 <View style={styles.optionBg}><Ionicons name="eye-off" size={18} color="#fff" /></View>
                 <View style={styles.optionTextWrap}>
-                  <Text style={styles.optionLabel}>Masquer l'adresse</Text>
+                  <Text style={styles.optionLabel}>Masquer l&apos;adresse</Text>
                   <Text style={styles.optionSubLabel}>Visible uniquement par les inscrits</Text>
                 </View>
                 <Switch
@@ -438,7 +440,7 @@ export default function CreateEventScreen() {
                   thumbColor="#fff"
                 />
               </View>
-              <View style={styles.optionRow}>
+              <View style={[styles.optionRow, isAdmin ? styles.cardRowBorder : undefined]}>
                 <View style={[styles.optionBg, { backgroundColor: '#F59E0B' }]}><Ionicons name="shield-checkmark" size={18} color="#fff" /></View>
                 <View style={styles.optionTextWrap}>
                   <Text style={styles.optionLabel}>Validation manuelle</Text>
@@ -451,6 +453,21 @@ export default function CreateEventScreen() {
                   thumbColor="#fff"
                 />
               </View>
+              {isAdmin ? (
+                <View style={styles.optionRow}>
+                  <View style={[styles.optionBg, { backgroundColor: '#EC4899' }]}><Ionicons name="flask" size={18} color="#fff" /></View>
+                  <View style={styles.optionTextWrap}>
+                    <Text style={styles.optionLabel}>Sortie bêta</Text>
+                    <Text style={styles.optionSubLabel}>Marquer comme pilote (admin)</Text>
+                  </View>
+                  <Switch
+                    value={markAsBeta}
+                    onValueChange={setMarkAsBeta}
+                    trackColor={{ false: '#3a3a3c', true: '#EC4899' }}
+                    thumbColor="#fff"
+                  />
+                </View>
+              ) : null}
             </View>
           </View>
 

@@ -82,4 +82,6 @@ export interface Event {
   hideAddress?: boolean;
   /** Création : l’organisateur valide chaque inscription. */
   manualApproval?: boolean;
+  /** Sortie pilote / programme bêta (masquable côté admin dans les paramètres session). */
+  isBeta?: boolean;
 }

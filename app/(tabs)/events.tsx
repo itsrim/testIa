@@ -331,7 +331,14 @@ function EventCard({ item, onToggleFavorite }: { item: Event; onToggleFavorite: 
             contentFit="cover"
           />
           <View style={styles.cardImgTop}>
-            <View style={styles.cardTagsLeft}>{statusEl}</View>
+            <View style={styles.cardTagsLeft}>
+              {statusEl}
+              {item.isBeta ? (
+                <View style={[styles.tag, styles.tagBeta, { marginTop: 4 }]}>
+                  <Text style={styles.tagTextInv}>BÊTA</Text>
+                </View>
+              ) : null}
+            </View>
             <View style={styles.pricePill}>
               <Text style={styles.priceText}>{item.priceLabel}</Text>
             </View>
@@ -399,7 +406,12 @@ export default function EventsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { events, toggleEventFavorite } = useMessaging();
-  const { getLimits, isPremium, isRestricted } = useProfileSettings();
+  const { getLimits, isPremium, isRestricted, publishBetaEvents } = useProfileSettings();
+
+  const agendaEvents = useMemo(
+    () => (publishBetaEvents ? events : events.filter((e) => !e.isBeta)),
+    [events, publishBetaEvents],
+  );
 
   const handleToggleFavorite = useCallback(
     (eventId: string) => {
@@ -431,8 +443,8 @@ export default function EventsScreen() {
   selectedDateKeyRef.current = selectedDateKey;
 
   const weekEvents = useMemo(() => {
-    return events.filter((s) => isEventInWeek(s, weekStartMonday));
-  }, [events, weekStartMonday]);
+    return agendaEvents.filter((s) => isEventInWeek(s, weekStartMonday));
+  }, [agendaEvents, weekStartMonday]);
 
   const sectionListSections = useMemo((): AgendaSection[] => {
     const map = new Map<string, Event[]>();
@@ -578,7 +590,7 @@ export default function EventsScreen() {
    * et le scroll vers le jour sélectionné ne fonctionne pas (comportement RN).
    */
   const listEmpty =
-    events.length === 0 ? (
+    agendaEvents.length === 0 ? (
       <Text style={styles.empty}>
         Aucun événement. Appuyez sur + pour en créer un, ou depuis une conversation.
       </Text>
@@ -608,7 +620,7 @@ export default function EventsScreen() {
         viewabilityConfig={viewabilityConfig}
         onViewableItemsChanged={onViewableItemsChanged}
         contentContainerStyle={
-          events.length === 0 || weekEvents.length === 0
+          agendaEvents.length === 0 || weekEvents.length === 0
             ? styles.sectionListContentEmpty
             : [styles.sectionListContent, { paddingBottom: Design.contentBottomSpace + insets.bottom + 12 }]
         }
@@ -819,6 +831,10 @@ const styles = StyleSheet.create({
   },
   cardTagsLeft: {
     flexShrink: 1,
+    alignItems: 'flex-start',
+  },
+  tagBeta: {
+    backgroundColor: 'rgba(236,72,153,0.92)',
   },
   tag: {
     flexDirection: 'row',

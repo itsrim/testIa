@@ -34,6 +34,41 @@ import {
   type Event,
 } from '@/types/messaging';
 
+export type OrganizerNotificationItem = {
+  id: string;
+  eventId: string;
+  eventTitle: string;
+  body: string;
+  createdAt: number;
+  read: boolean;
+  requestId?: string;
+};
+
+function buildSeedOrganizerNotifications(
+  evs: Event[],
+  queues: Record<string, EventWaitingMember[]>,
+): OrganizerNotificationItem[] {
+  const list: OrganizerNotificationItem[] = [];
+  let t = 0;
+  for (const ev of evs) {
+    if (!ev.manualApproval || ev.cardStatus !== 'organisateur') continue;
+    const q = queues[ev.id] ?? [];
+    for (const w of q) {
+      t += 1;
+      list.push({
+        id: `seed-on-${ev.id}-${w.id}`,
+        eventId: ev.id,
+        eventTitle: ev.title,
+        body: `${w.displayName} souhaite rejoindre la sortie.`,
+        createdAt: Date.now() - t * 120_000,
+        read: false,
+        requestId: w.id,
+      });
+    }
+  }
+  return list.sort((a, b) => b.createdAt - a.createdAt);
+}
+
 function participantFromWaitingMember(w: EventWaitingMember): EventParticipantDetail {
   const avatarUrl =
     w.avatarUrl ??
@@ -45,6 +80,7 @@ function participantFromWaitingMember(w: EventWaitingMember): EventParticipantDe
     rating: w.rating,
     isOrganizer: false,
     isSelf: Boolean(w.isViewerRequest),
+    profilId: w.profilId,
   };
 }
 
@@ -108,6 +144,7 @@ export type NewEventInput = {
   dateKey?: string;
   hideAddress?: boolean;
   manualApproval?: boolean;
+  isBeta?: boolean;
 };
 
 type MessagingContextValue = {
@@ -133,6 +170,8 @@ type MessagingContextValue = {
   getViewerCardStatus: (event: Event) => EventCardStatus;
   /** Organisateur : approuve la première demande en file (FIFO). */
   approveJoinRequest: (eventId: string) => void;
+  /** Organisateur : accepte une demande précise dans la file. */
+  approvePendingMember: (eventId: string, requestId: string) => void;
   /** Organisateur : refuse / retire une demande de la file d’attente. */
   rejectPendingJoinRequest: (eventId: string, requestId: string) => void;
   /** Organisateur : retire un participant confirmé (hors organisateur). */
@@ -177,6 +216,11 @@ type MessagingContextValue = {
   leaveGroup: (conversationId: string) => void;
   /** Force un nettoyage d'intégrité (réservé admin) */
   cleanData: () => void;
+  /** Notifications organisateur (demandes d’inscription sur sorties à validation manuelle). */
+  organizerNotificationsForViewer: OrganizerNotificationItem[];
+  unreadOrganizerNotificationCount: number;
+  markOrganizerNotificationRead: (id: string) => void;
+  markAllOrganizerNotificationsRead: () => void;
 };
 
 const MessagingContext = createContext<MessagingContextValue | null>(null);
@@ -203,6 +247,9 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const [pendingJoinQueueByEvent, setPendingJoinQueueByEvent] = useState<
     Record<string, EventWaitingMember[]>
   >(() => getInitialPendingQueuesByEvent());
+  const [organizerNotifications, setOrganizerNotifications] = useState<OrganizerNotificationItem[]>(
+    () => buildSeedOrganizerNotifications(seedEvents, getInitialPendingQueuesByEvent()),
+  );
   const [approvedParticipantsByEvent, setApprovedParticipantsByEvent] = useState<
     Record<string, EventParticipantDetail[]>
   >({});
@@ -309,6 +356,35 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   const messagesTabBadgeCount = useMemo(() => sumUnread(conversations), [conversations]);
   const visitesTabBadgeCount = mockMessagingSeed.visitesTabBadgeCount;
 
+  const organizerNotificationsForViewer = useMemo(() => {
+    return organizerNotifications
+      .filter((n) => {
+        const ev = events.find((e) => e.id === n.eventId);
+        return Boolean(ev && ev.manualApproval && ev.cardStatus === 'organisateur');
+      })
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }, [organizerNotifications, events]);
+
+  const unreadOrganizerNotificationCount = useMemo(
+    () => organizerNotificationsForViewer.filter((n) => !n.read).length,
+    [organizerNotificationsForViewer],
+  );
+
+  const markOrganizerNotificationRead = useCallback((id: string) => {
+    setOrganizerNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
+  }, []);
+
+  const markAllOrganizerNotificationsRead = useCallback(() => {
+    const visibleIds = new Set(
+      organizerNotificationsForViewer.map((n) => n.id),
+    );
+    setOrganizerNotifications((prev) =>
+      prev.map((n) => (visibleIds.has(n.id) ? { ...n, read: true } : n)),
+    );
+  }, [organizerNotificationsForViewer]);
+
   const getConversation = useCallback(
     (id: string) => conversations.find((c) => c.id === id),
     [conversations],
@@ -342,6 +418,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       sectionDateLabel: input.sectionDateLabel ?? 'À venir',
       hideAddress: input.hideAddress,
       manualApproval: input.manualApproval,
+      isBeta: input.isBeta === true ? true : undefined,
     };
     setEvents((prev) => [event, ...prev]);
   }, []);
@@ -397,6 +474,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
   );
 
   const rejectPendingJoinRequest = useCallback((eventId: string, requestId: string) => {
+    setOrganizerNotifications((prev) => prev.filter((n) => n.requestId !== requestId));
     setPendingJoinQueueByEvent((q) => ({
       ...q,
       [eventId]: (q[eventId] ?? []).filter((x) => x.id !== requestId),
@@ -484,44 +562,52 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
 
   const joinEvent = useCallback(
     (eventId: string) => {
-      setEvents((prevEvents) => {
-        const ev = prevEvents.find((e) => e.id === eventId);
-        if (!ev || ev.cardStatus !== 'join' || ev.participantCount >= ev.participantMax) {
-          return prevEvents;
-        }
+      const ev = events.find((e) => e.id === eventId);
+      if (!ev || ev.cardStatus !== 'join' || ev.participantCount >= ev.participantMax) return;
 
-        if (ev.manualApproval) {
-          const id = makeId('pj');
-          viewerPendingJoinIdRef.current[eventId] = id;
-          setParticipationOverlay((o) => ({ ...o, [eventId]: 'en_attente' }));
-          setPendingJoinQueueByEvent((q) => ({
-            ...q,
-            [eventId]: [
-              ...(q[eventId] ?? []),
-              {
-                id,
-                displayName: 'Vous (demande en cours)',
-                rating: 4.5,
-                avatarUrl:
-                  'https://ui-avatars.com/api/?name=Vous&size=128&background=78909C&color=fff',
-                isViewerRequest: true,
-              },
-            ],
-          }));
-          return prevEvents;
-        }
+      if (ev.manualApproval) {
+        const id = makeId('pj');
+        viewerPendingJoinIdRef.current[eventId] = id;
+        setParticipationOverlay((o) => ({ ...o, [eventId]: 'en_attente' }));
+        setPendingJoinQueueByEvent((q) => ({
+          ...q,
+          [eventId]: [
+            ...(q[eventId] ?? []),
+            {
+              id,
+              displayName: 'Vous (demande en cours)',
+              rating: 4.5,
+              avatarUrl:
+                'https://ui-avatars.com/api/?name=Vous&size=128&background=78909C&color=fff',
+              isViewerRequest: true,
+            },
+          ],
+        }));
+        setOrganizerNotifications((prev) => [
+          {
+            id: makeId('on'),
+            eventId,
+            eventTitle: ev.title,
+            body: `Nouvelle demande : Vous (demande en cours) souhaite rejoindre « ${ev.title} ».`,
+            createdAt: Date.now(),
+            read: false,
+            requestId: id,
+          },
+          ...prev,
+        ]);
+        return;
+      }
 
-        const cid = ev.conversationId;
-        addSelfToEventGroupChat(cid);
-
-        return prevEvents.map((s) =>
+      addSelfToEventGroupChat(ev.conversationId);
+      setEvents((prev) =>
+        prev.map((s) =>
           s.id === eventId
             ? { ...s, cardStatus: 'inscrit', participantCount: s.participantCount + 1 }
             : s,
-        );
-      });
+        ),
+      );
     },
-    [addSelfToEventGroupChat],
+    [events, addSelfToEventGroupChat],
   );
 
   const leaveEvent = useCallback(
@@ -530,6 +616,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       if (pending) {
         const vid = viewerPendingJoinIdRef.current[eventId];
         if (vid) {
+          setOrganizerNotifications((prev) => prev.filter((n) => n.requestId !== vid));
           setPendingJoinQueueByEvent((q) => ({
             ...q,
             [eventId]: (q[eventId] ?? []).filter((x) => x.id !== vid),
@@ -568,18 +655,21 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
     [removeSelfFromEventGroupChat],
   );
 
-  const approveJoinRequest = useCallback(
-    (eventId: string) => {
+  const approvePendingMember = useCallback(
+    (eventId: string, requestId: string) => {
       const ev = events.find((e) => e.id === eventId);
       if (!ev || !ev.manualApproval || ev.cardStatus !== 'organisateur') return;
       if (ev.participantCount >= ev.participantMax) return;
 
+      setOrganizerNotifications((prev) => prev.filter((n) => n.requestId !== requestId));
+
       setPendingJoinQueueByEvent((queues) => {
         const queue = [...(queues[eventId] ?? [])];
-        if (queue.length === 0) return queues;
-        const first = queue[0];
-        const rest = queue.slice(1);
-        const part = participantFromWaitingMember(first);
+        const idx = queue.findIndex((x) => x.id === requestId);
+        if (idx === -1) return queues;
+        const member = queue[idx];
+        const rest = queue.filter((_, i) => i !== idx);
+        const part = participantFromWaitingMember(member);
 
         setApprovedParticipantsByEvent((ap) => ({
           ...ap,
@@ -591,7 +681,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
           ),
         );
 
-        if (first.isViewerRequest) {
+        if (member.isViewerRequest) {
           addSelfToEventGroupChat(ev.conversationId);
           setParticipationOverlay((o) => ({ ...o, [eventId]: 'inscrit' }));
           delete viewerPendingJoinIdRef.current[eventId];
@@ -601,6 +691,15 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       });
     },
     [events, addSelfToEventGroupChat],
+  );
+
+  const approveJoinRequest = useCallback(
+    (eventId: string) => {
+      const first = pendingJoinQueueByEvent[eventId]?.[0];
+      if (!first) return;
+      approvePendingMember(eventId, first.id);
+    },
+    [pendingJoinQueueByEvent, approvePendingMember],
   );
 
   const postEventGroupWelcome = useCallback((conversationId: string, eventTitle: string) => {
@@ -1001,6 +1100,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       leaveEvent,
       getViewerCardStatus,
       approveJoinRequest,
+      approvePendingMember,
       rejectPendingJoinRequest,
       removeEventParticipant,
       postEventGroupWelcome,
@@ -1022,6 +1122,10 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       demoSimulateIncomingMessage,
       leaveGroup,
       cleanData,
+      organizerNotificationsForViewer,
+      unreadOrganizerNotificationCount,
+      markOrganizerNotificationRead,
+      markAllOrganizerNotificationsRead,
     }),
     [
       favoriteConversationIds,
@@ -1040,6 +1144,7 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       leaveEvent,
       getViewerCardStatus,
       approveJoinRequest,
+      approvePendingMember,
       rejectPendingJoinRequest,
       removeEventParticipant,
       postEventGroupWelcome,
@@ -1061,6 +1166,10 @@ export function MessagingProvider({ children }: { children: React.ReactNode }) {
       demoSimulateIncomingMessage,
       leaveGroup,
       cleanData,
+      organizerNotificationsForViewer,
+      unreadOrganizerNotificationCount,
+      markOrganizerNotificationRead,
+      markAllOrganizerNotificationsRead,
     ],
   );
 

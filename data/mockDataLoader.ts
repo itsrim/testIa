@@ -121,6 +121,7 @@ function parseEvents(anchor: number): Event[] {
     const notes = r.notes?.trim();
     if (notes) s.notes = notes;
     if (r.manualApproval === '1') s.manualApproval = true;
+    if (r.isBeta === '1') s.isBeta = true;
     return s;
   });
 }

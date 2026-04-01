@@ -70,9 +70,21 @@
     "tabFriends": "Amis",
     "tabPast": "Passés",
     "tabSettings": "Paramètres",
+    "closeSettings": "Fermer les paramètres",
+    "tabNotifications": "Notifs",
+    "notificationsIntro": "Demandes d’inscription sur vos sorties à validation manuelle. Touchez une ligne pour ouvrir la sortie.",
+    "notificationsEmpty": "Aucune notification pour l’instant.",
+    "notificationsMarkAllRead": "Tout marquer comme lu",
     "tabReports": "Signalements",
     "reportsIntro": "Profils signalés par les utilisateurs. Masquez un compte pour le retirer des listes et des fiches pour tout le monde.",
     "reportsEmpty": "Aucun signalement pour l’instant.",
+    "reportsEventsIntro": "Sorties signalées (suppression, jauge, corrections…). Marquez comme traité une fois l’action faite.",
+    "eventReportDismissCta": "Traité",
+    "eventReportReason": {
+      "delete": "Suppression demandée",
+      "capacity": "Jauge / places",
+      "other": "Autre modification"
+    },
     "reportsHideCta": "Masquer pour tout le monde",
     "reportsHiddenBadge": "Masqué globalement",
     "reportsHideConfirmTitle": "Masquer ce profil ?",
@@ -94,6 +106,8 @@
     "adminOnSubtitle": "Accès illimité aux dates passées",
     "adminOffSubtitle": "Mode utilisateur standard",
     "adminTitle": "Mode admin",
+    "betaEventsTitle": "Sorties bêta dans l’agenda",
+    "betaEventsSubtitle": "Publier les sorties marquées bêta (réservé admin).",
     "language": "Langue",
     "sectionParams": "Paramètres",
     "maxParticipantsRow": "Participants max par événement",
@@ -159,6 +173,23 @@
         "subtitle": "La recherche d’événements est réservée aux Premium"
       }
     }
+  },
+  "eventDetail": {
+    "linkMenuTitle": "Partager ou signaler",
+    "shareLink": "Partager le lien…",
+    "copyLink": "Copier le lien",
+    "reportToAdmin": "Signaler à un admin…",
+    "linkCopied": "Lien copié dans le presse-papiers.",
+    "shareErrorTitle": "Partage impossible",
+    "shareErrorBody": "Réessayez ou copiez le lien manuellement.",
+    "reportTitle": "Signalement sortie",
+    "reportBody": "Les admins pourront supprimer la sortie, ajuster la jauge des participants ou modifier les informations affichées.",
+    "reportReasonDelete": "Demander la suppression",
+    "reportReasonCapacity": "Jauge ou nombre de places",
+    "reportReasonOther": "Autre modification (titre, lieu, date…)",
+    "reportSentTitle": "Signalement envoyé",
+    "reportSentBody": "Merci. L’équipe en prendra connaissance.",
+    "shareMenuA11y": "Partager le lien, copier ou signaler la sortie"
   },
   "moderation": {
     "reportAccessibility": "Signaler un problème avec ce profil",

@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -33,7 +34,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-type TabId = 'favorites' | 'friends' | 'history' | 'reports' | 'settings';
+type TabId = 'favorites' | 'friends' | 'history' | 'reports' | 'notifications';
 
 const PINK = '#FF4B81';
 const PURPLE = '#8B5CF6';
@@ -47,6 +48,11 @@ const SWITCH_RESTRICTION_OFF_TRACK = '#E8E8E8';
 const SWITCH_RESTRICTION_ON_TRACK = Design.badgeGold;
 const SWITCH_RESTRICTION_THUMB_ON = PURPLE;
 const SWITCH_RESTRICTION_THUMB_OFF_OR_DISABLED = '#FFFFFF';
+/** Paramètres (bêta, langue, questionnaire) : même code couleur ON que les restrictions. */
+const SWITCH_SETTINGS_OFF_TRACK = '#3A3A3C';
+const SWITCH_SETTINGS_ON_TRACK = SWITCH_RESTRICTION_ON_TRACK;
+const SWITCH_SETTINGS_THUMB_ON = SWITCH_RESTRICTION_THUMB_ON;
+const SWITCH_SETTINGS_THUMB_OFF = SWITCH_RESTRICTION_THUMB_OFF_OR_DISABLED;
 
 const RESTRICTION_ORDER: RestrictionKey[] = [
   'blurProfiles',
@@ -71,7 +77,15 @@ export default function ProfileScreen() {
     setLangEn(i18n.language.startsWith('en'));
   }, [i18n.language]);
 
-  const { events, cleanData, getViewerCardStatus } = useMessaging();
+  const {
+    events,
+    cleanData,
+    getViewerCardStatus,
+    organizerNotificationsForViewer,
+    unreadOrganizerNotificationCount,
+    markOrganizerNotificationRead,
+    markAllOrganizerNotificationsRead,
+  } = useMessaging();
 
   const eventParticipated = useCallback(
     (e: Event) => {
@@ -87,6 +101,8 @@ export default function ProfileScreen() {
     toggleAdmin,
     hideDailyQuestionnaire,
     setHideDailyQuestionnaire,
+    publishBetaEvents,
+    setPublishBetaEvents,
     getLimits,
     restrictions,
     toggleRestriction,
@@ -95,7 +111,9 @@ export default function ProfileScreen() {
 
   const {
     reports,
+    eventReports,
     hideProfileGlobally,
+    dismissEventReport,
     pendingReportsBadgeCount,
     isProfileHidden,
   } = useModeration();
@@ -114,6 +132,7 @@ export default function ProfileScreen() {
   } = useProfileIdentity();
 
   const [tab, setTab] = useState<TabId>('favorites');
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [meCsv, setMeCsv] = useState<ProfileMeRow | null>(null);
   const [friendsCsv, setFriendsCsv] = useState<ProfileFriendRow[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -249,6 +268,8 @@ export default function ProfileScreen() {
         return historyEvents.length;
       case 'reports':
         return pendingReportsBadgeCount;
+      case 'notifications':
+        return unreadOrganizerNotificationCount;
       default:
         return 0;
     }
@@ -281,6 +302,14 @@ export default function ProfileScreen() {
             style={StyleSheet.absoluteFillObject}
           />
           <View style={[styles.heroTopBar, { paddingTop: insets.top + 6 }]}>
+            <Pressable
+              onPress={() => setSettingsModalOpen(true)}
+              style={({ pressed }) => [styles.heroIconBtn, pressed && { opacity: 0.75 }]}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.tabSettings')}>
+              <Ionicons name="settings-outline" size={22} color="#fff" />
+            </Pressable>
             <View style={{ flex: 1 }} />
             <Pressable
               onPress={pickAvatar}
@@ -451,11 +480,13 @@ export default function ProfileScreen() {
             locked={!canSeePast}
           />
           <TabBtn
-            label={t('profile.tabSettings')}
-            icon="settings-outline"
-            active={tab === 'settings'}
-            onPress={() => setTab('settings')}
-            underlineColor="#9CA3AF"
+            label={t('profile.tabNotifications')}
+            icon="notifications-outline"
+            active={tab === 'notifications'}
+            onPress={() => setTab('notifications')}
+            badge={tabBadge('notifications')}
+            badgeColor="#5AC8FA"
+            underlineColor="#5AC8FA"
           />
         </ScrollView>
 
@@ -501,61 +532,152 @@ export default function ProfileScreen() {
 
         {tab === 'reports' && isAdmin && (
           <View style={styles.listBlock}>
-            <Text style={styles.reportsIntro}>{t('profile.reportsIntro')}</Text>
-            {reports.length === 0 ? (
+            {eventReports.length === 0 && reports.length === 0 ? (
               <EmptyHint icon="warning-outline" text={t('profile.reportsEmpty')} />
-            ) : (
-              reports.map((r) => {
-                const hidden = isProfileHidden(r.profileId);
-                const when = new Date(r.createdAt).toLocaleString(i18n.language.startsWith('en') ? 'en' : 'fr', {
-                  dateStyle: 'short',
-                  timeStyle: 'short',
-                });
-                return (
-                  <View key={r.id} style={styles.reportCard}>
-                    {r.imageUrl ? (
-                      <Image source={{ uri: r.imageUrl }} style={styles.reportAvatar} contentFit="cover" />
-                    ) : (
+            ) : null}
+            {eventReports.length > 0 ? (
+              <>
+                <Text style={styles.reportsIntro}>{t('profile.reportsEventsIntro')}</Text>
+                {eventReports.map((er) => {
+                  const when = new Date(er.createdAt).toLocaleString(
+                    i18n.language.startsWith('en') ? 'en' : 'fr',
+                    { dateStyle: 'short', timeStyle: 'short' },
+                  );
+                  const reasonLabel = t(`profile.eventReportReason.${er.reasonKey}`);
+                  return (
+                    <View key={er.id} style={styles.reportCard}>
                       <View style={[styles.reportAvatar, styles.reportAvatarPh]}>
-                        <Ionicons name="person" size={22} color={Design.textSecondary} />
+                        <Ionicons name="calendar-outline" size={22} color={Design.textSecondary} />
                       </View>
-                    )}
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.reportName} numberOfLines={1}>
-                        @{r.pseudo}
-                      </Text>
-                      <Text style={styles.reportMeta} numberOfLines={2}>
-                        id {r.profileId} · {when}
-                      </Text>
-                      {hidden ? (
-                        <Text style={styles.reportHiddenLbl}>{t('profile.reportsHiddenBadge')}</Text>
-                      ) : null}
+                      <Pressable
+                        onPress={() => router.push(`/event/${er.eventId}`)}
+                        style={({ pressed }) => [{ flex: 1, minWidth: 0 }, pressed && { opacity: 0.88 }]}>
+                        <Text style={styles.reportName} numberOfLines={2}>
+                          {er.eventTitle}
+                        </Text>
+                        <Text style={styles.reportMeta} numberOfLines={3}>
+                          {reasonLabel} · id {er.eventId} · {when}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => dismissEventReport(er.id)}
+                        style={({ pressed }) => [styles.reportHideBtn, pressed && { opacity: 0.85 }]}>
+                        <Ionicons name="checkmark-done-outline" size={18} color="#fff" />
+                        <Text style={styles.reportHideBtnTxt}>{t('profile.eventReportDismissCta')}</Text>
+                      </Pressable>
                     </View>
-                    <Pressable
-                      disabled={hidden}
-                      onPress={() =>
-                        Alert.alert(
-                          t('profile.reportsHideConfirmTitle'),
-                          t('profile.reportsHideConfirmBody'),
-                          [
-                            { text: t('profile.cancel'), style: 'cancel' },
-                            {
-                              text: t('profile.reportsHideConfirmOk'),
-                              style: 'destructive',
-                              onPress: () => hideProfileGlobally(r.profileId),
-                            },
-                          ],
-                        )
-                      }
-                      style={({ pressed }) => [
-                        styles.reportHideBtn,
-                        hidden && { opacity: 0.4 },
-                        pressed && !hidden && { opacity: 0.85 },
-                      ]}>
-                      <Ionicons name="eye-off-outline" size={18} color="#fff" />
-                      <Text style={styles.reportHideBtnTxt}>{t('profile.reportsHideCta')}</Text>
-                    </Pressable>
-                  </View>
+                  );
+                })}
+              </>
+            ) : null}
+            {reports.length > 0 ? (
+              <>
+                <Text
+                  style={[
+                    styles.reportsIntro,
+                    eventReports.length > 0 && { marginTop: 20 },
+                  ]}>
+                  {t('profile.reportsIntro')}
+                </Text>
+                {reports.map((r) => {
+                  const hidden = isProfileHidden(r.profileId);
+                  const when = new Date(r.createdAt).toLocaleString(
+                    i18n.language.startsWith('en') ? 'en' : 'fr',
+                    { dateStyle: 'short', timeStyle: 'short' },
+                  );
+                  return (
+                    <View key={r.id} style={styles.reportCard}>
+                      {r.imageUrl ? (
+                        <Image source={{ uri: r.imageUrl }} style={styles.reportAvatar} contentFit="cover" />
+                      ) : (
+                        <View style={[styles.reportAvatar, styles.reportAvatarPh]}>
+                          <Ionicons name="person" size={22} color={Design.textSecondary} />
+                        </View>
+                      )}
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.reportName} numberOfLines={1}>
+                          @{r.pseudo}
+                        </Text>
+                        <Text style={styles.reportMeta} numberOfLines={2}>
+                          id {r.profileId} · {when}
+                        </Text>
+                        {hidden ? (
+                          <Text style={styles.reportHiddenLbl}>{t('profile.reportsHiddenBadge')}</Text>
+                        ) : null}
+                      </View>
+                      <Pressable
+                        disabled={hidden}
+                        onPress={() =>
+                          Alert.alert(
+                            t('profile.reportsHideConfirmTitle'),
+                            t('profile.reportsHideConfirmBody'),
+                            [
+                              { text: t('profile.cancel'), style: 'cancel' },
+                              {
+                                text: t('profile.reportsHideConfirmOk'),
+                                style: 'destructive',
+                                onPress: () => hideProfileGlobally(r.profileId),
+                              },
+                            ],
+                          )
+                        }
+                        style={({ pressed }) => [
+                          styles.reportHideBtn,
+                          hidden && { opacity: 0.4 },
+                          pressed && !hidden && { opacity: 0.85 },
+                        ]}>
+                        <Ionicons name="eye-off-outline" size={18} color="#fff" />
+                        <Text style={styles.reportHideBtnTxt}>{t('profile.reportsHideCta')}</Text>
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </>
+            ) : null}
+          </View>
+        )}
+
+        {tab === 'notifications' && (
+          <View style={styles.listBlock}>
+            <Text style={styles.notificationsIntro}>{t('profile.notificationsIntro')}</Text>
+            {organizerNotificationsForViewer.length > 0 && unreadOrganizerNotificationCount > 0 ? (
+              <Pressable
+                onPress={markAllOrganizerNotificationsRead}
+                style={({ pressed }) => [styles.markAllReadBtn, pressed && { opacity: 0.8 }]}>
+                <Text style={styles.markAllReadTxt}>{t('profile.notificationsMarkAllRead')}</Text>
+              </Pressable>
+            ) : null}
+            {organizerNotificationsForViewer.length === 0 ? (
+              <EmptyHint icon="notifications-off-outline" text={t('profile.notificationsEmpty')} />
+            ) : (
+              organizerNotificationsForViewer.map((n) => {
+                const when = new Date(n.createdAt).toLocaleString(
+                  i18n.language.startsWith('en') ? 'en' : 'fr',
+                  { dateStyle: 'short', timeStyle: 'short' },
+                );
+                return (
+                  <Pressable
+                    key={n.id}
+                    onPress={() => {
+                      markOrganizerNotificationRead(n.id);
+                      router.push(`/event/${n.eventId}`);
+                    }}
+                    style={({ pressed }) => [
+                      styles.notificationCard,
+                      !n.read && styles.notificationCardUnread,
+                      pressed && { opacity: 0.88 },
+                    ]}>
+                    <View style={styles.notificationTop}>
+                      <Text style={styles.notificationTitle} numberOfLines={1}>
+                        {n.eventTitle}
+                      </Text>
+                      {!n.read ? <View style={styles.unreadDot} /> : null}
+                    </View>
+                    <Text style={styles.notificationBody} numberOfLines={3}>
+                      {n.body}
+                    </Text>
+                    <Text style={styles.notificationWhen}>{when}</Text>
+                  </Pressable>
                 );
               })
             )}
@@ -586,209 +708,289 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {tab === 'settings' && (
-          <View style={styles.listBlock}>
-            <Pressable
-              onPress={togglePremium}
-              style={[
-                styles.bigCard,
-                isPremium && { backgroundColor: 'transparent' },
-              ]}>
-              {isPremium ? (
-                <LinearGradient
-                  colors={['#F59E0B', '#EA580C']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.bigCardInner}>
-                  <SettingsCardInner
-                    icon="star"
-                    title={t('profile.premiumOnTitle')}
-                    subtitle={t('profile.premiumOnSubtitle')}
-                    switchOn={isPremium}
-                  />
-                </LinearGradient>
-              ) : (
-                <View style={[styles.bigCardInner, { backgroundColor: CARD }]}>
-                  <SettingsCardInner
-                    icon="star-outline"
-                    title={t('profile.freeModeTitle')}
-                    subtitle={t('profile.freeModeSubtitle')}
-                    switchOn={isPremium}
-                  />
-                </View>
-              )}
-            </Pressable>
-
-            <Pressable onPress={toggleAdmin} style={styles.bigCard}>
-              {isAdmin ? (
-                <LinearGradient
-                  colors={['#4F46E5', '#7C3AED']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.bigCardInner}>
-                  <SettingsCardInner
-                    icon="shield"
-                    title={t('profile.adminTitle')}
-                    subtitle={t('profile.adminOnSubtitle')}
-                    switchOn={isAdmin}
-                    light
-                  />
-                </LinearGradient>
-              ) : (
-                <View style={[styles.bigCardInner, { backgroundColor: CARD }]}>
-                  <SettingsCardInner
-                    icon="shield-outline"
-                    title={t('profile.adminTitle')}
-                    subtitle={t('profile.adminOffSubtitle')}
-                    switchOn={isAdmin}
-                  />
-                </View>
-              )}
-            </Pressable>
-
-            <View style={[styles.bigCard, { backgroundColor: CARD }]}>
-              <View style={[styles.bigCardInner, styles.langCardRow]}>
-                <View style={styles.globeBox}>
-                  <Ionicons name="globe-outline" size={24} color="#0284C7" />
-                </View>
-                <View style={styles.langTexts}>
-                  <Text style={styles.langTitle}>{t('profile.language')}</Text>
-                  <Text style={styles.langSub}>
-                    {!langEn ? t('profile.langFr') : t('profile.langEn')}
-                  </Text>
-                </View>
-                <View style={styles.langToggleRow}>
-                  <Text style={[styles.langToggleLbl, !langEn && styles.langToggleLblActive]}>FR</Text>
-                  <Switch
-                    accessibilityLabel={t('profile.language')}
-                    value={langEn}
-                    onValueChange={(useEn) => {
-                      setLangEn(useEn);
-                      void i18n.changeLanguage(useEn ? 'en' : 'fr');
-                    }}
-                    trackColor={{ false: '#3A3A3C', true: '#0284C7' }}
-                    thumbColor="#FFFFFF"
-                    ios_backgroundColor="#3A3A3C"
-                  />
-                  <Text style={[styles.langToggleLbl, langEn && styles.langToggleLblActive]}>EN</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={[styles.bigCard, { backgroundColor: CARD }]}>
-              <View style={[styles.bigCardInner, styles.langCardRow]}>
-                <View style={styles.globeBox}>
-                  <Ionicons name="clipboard-outline" size={24} color="#A78BFA" />
-                </View>
-                <View style={styles.langTexts}>
-                  <Text style={styles.langTitle}>{t('profile.questionnaireToggleTitle')}</Text>
-                  <Text style={styles.langSub}>{t('profile.questionnaireToggleSub')}</Text>
-                </View>
-                <Switch
-                  accessibilityLabel={t('profile.questionnaireToggleTitle')}
-                  value={hideDailyQuestionnaire}
-                  onValueChange={setHideDailyQuestionnaire}
-                  trackColor={{ false: '#3A3A3C', true: '#7C3AED' }}
-                  thumbColor="#FFFFFF"
-                  ios_backgroundColor="#3A3A3C"
-                />
-              </View>
-            </View>
-
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>{t('profile.sectionParams')}</Text>
-              <Row label={t('profile.maxParticipantsRow')} value={String(limits.maxParticipants)} />
-              <Row label={t('profile.maxRegistrationsRow')} value={String(limits.maxRegistrations)} />
-              <Row label={t('profile.maxFavoritesRow')} value={String(limits.maxFavorites)} />
-              <Row
-                label={t('profile.maxActiveEventsRow')}
-                value={limits.maxActiveEvents >= 999 ? '∞' : String(limits.maxActiveEvents)}
-                last
-              />
-            </View>
-
-            <View style={styles.sectionCard}>
-              <Text style={[styles.sectionTitle, !isPremium && { color: '#F87171' }]}>
-                {!isPremium
-                  ? t('profile.restrictionsFreeTitle')
-                  : t('profile.restrictionsControlTitle')}
-              </Text>
-              {RESTRICTION_ORDER.map((rowKey, i) => {
-                return (
-                  <View
-                    key={rowKey}
-                    style={[
-                      styles.restrictionRow,
-                      i < RESTRICTION_ORDER.length - 1 && styles.restrictionBorder,
-                    ]}>
-                    <View style={{ flex: 1, paddingRight: 12 }}>
-                      <Text style={styles.restTitle}>
-                        {t(`profile.restrictions.${rowKey}.title` as const)}
-                      </Text>
-                      <Text style={styles.restSub}>
-                        {t(`profile.restrictions.${rowKey}.subtitle` as const)}
-                      </Text>
-                    </View>
-                    <Switch
-                      value={isPremium ? restrictions[rowKey] : true}
-                      onValueChange={() => {
-                        if (isPremium) toggleRestriction(rowKey);
-                      }}
-                      disabled={!isPremium}
-                      trackColor={
-                        !isPremium
-                          ? {
-                              false: SWITCH_RESTRICTION_DISABLED_TRACK,
-                              true: SWITCH_RESTRICTION_DISABLED_TRACK,
-                            }
-                          : restrictions[rowKey]
-                            ? {
-                                false: SWITCH_RESTRICTION_OFF_TRACK,
-                                true: SWITCH_RESTRICTION_ON_TRACK,
-                              }
-                            : {
-                                false: SWITCH_RESTRICTION_OFF_TRACK,
-                                true: SWITCH_RESTRICTION_OFF_TRACK,
-                              }
-                      }
-                      thumbColor={
-                        !isPremium || !restrictions[rowKey]
-                          ? SWITCH_RESTRICTION_THUMB_OFF_OR_DISABLED
-                          : SWITCH_RESTRICTION_THUMB_ON
-                      }
-                      ios_backgroundColor={
-                        !isPremium
-                          ? SWITCH_RESTRICTION_DISABLED_TRACK
-                          : SWITCH_RESTRICTION_OFF_TRACK
-                      }
-                    />
-                  </View>
-                );
-              })}
-            </View>
-
-            <Pressable onPress={resetToCsvDefaults} style={styles.resetBtn}>
-              <Ionicons name="refresh" size={18} color="#EF4444" />
-              <Text style={styles.resetTxt}>{t('profile.resetSettings')}</Text>
-            </Pressable>
-
-            {isAdmin && (
-              <Pressable
-                onPress={() => {
-                  cleanData();
-                  Alert.alert('Succès', 'Les données ont été nettoyées et vérifiées avec succès !');
-                }}
-                style={[styles.resetBtn, { backgroundColor: 'rgba(79, 70, 229, 0.1)', borderColor: '#4F46E5', marginTop: 12 }]}>
-                <Ionicons name="color-wand" size={18} color="#4F46E5" />
-                <Text style={[styles.resetTxt, { color: '#4F46E5' }]}>Nettoyer les données (Admin)</Text>
-              </Pressable>
-            )}
-
-            <Text style={styles.autoSave}>{t('profile.sessionNote')}</Text>
-          </View>
-        )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={settingsModalOpen}
+        animationType="slide"
+        presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
+        onRequestClose={() => setSettingsModalOpen(false)}>
+        <View style={[styles.settingsModalRoot, { paddingTop: insets.top }]}>
+          <View style={styles.settingsModalHeader}>
+            <Text style={styles.settingsModalTitle}>{t('profile.tabSettings')}</Text>
+            <Pressable
+              onPress={() => setSettingsModalOpen(false)}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.closeSettings')}>
+              <Ionicons name="close" size={28} color={Design.textPrimary} />
+            </Pressable>
+          </View>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingBottom: insets.bottom + 32,
+              paddingHorizontal: 16,
+              paddingTop: 8,
+            }}>
+            <View style={styles.listBlock}>
+              <Pressable
+                onPress={togglePremium}
+                style={[
+                  styles.bigCard,
+                  isPremium && { backgroundColor: 'transparent' },
+                ]}>
+                {isPremium ? (
+                  <LinearGradient
+                    colors={['#F59E0B', '#EA580C']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.bigCardInner}>
+                    <SettingsCardInner
+                      icon="star"
+                      title={t('profile.premiumOnTitle')}
+                      subtitle={t('profile.premiumOnSubtitle')}
+                      switchOn={isPremium}
+                    />
+                  </LinearGradient>
+                ) : (
+                  <View style={[styles.bigCardInner, { backgroundColor: CARD }]}>
+                    <SettingsCardInner
+                      icon="star-outline"
+                      title={t('profile.freeModeTitle')}
+                      subtitle={t('profile.freeModeSubtitle')}
+                      switchOn={isPremium}
+                    />
+                  </View>
+                )}
+              </Pressable>
+
+              <Pressable onPress={toggleAdmin} style={styles.bigCard}>
+                {isAdmin ? (
+                  <LinearGradient
+                    colors={['#4F46E5', '#7C3AED']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.bigCardInner}>
+                    <SettingsCardInner
+                      icon="shield"
+                      title={t('profile.adminTitle')}
+                      subtitle={t('profile.adminOnSubtitle')}
+                      switchOn={isAdmin}
+                      light
+                    />
+                  </LinearGradient>
+                ) : (
+                  <View style={[styles.bigCardInner, { backgroundColor: CARD }]}>
+                    <SettingsCardInner
+                      icon="shield-outline"
+                      title={t('profile.adminTitle')}
+                      subtitle={t('profile.adminOffSubtitle')}
+                      switchOn={isAdmin}
+                    />
+                  </View>
+                )}
+              </Pressable>
+
+              {isAdmin ? (
+                <View style={[styles.bigCard, { backgroundColor: CARD }]}>
+                  <View style={[styles.bigCardInner, styles.langCardRow]}>
+                    <View style={[styles.globeBox, { backgroundColor: 'rgba(236,72,153,0.2)' }]}>
+                      <Ionicons name="flask-outline" size={24} color="#F472B6" />
+                    </View>
+                    <View style={styles.langTexts}>
+                      <Text style={styles.langTitle}>{t('profile.betaEventsTitle')}</Text>
+                      <Text style={styles.langSub}>{t('profile.betaEventsSubtitle')}</Text>
+                    </View>
+                    <Switch
+                      accessibilityLabel={t('profile.betaEventsTitle')}
+                      value={publishBetaEvents}
+                      onValueChange={setPublishBetaEvents}
+                      trackColor={{
+                        false: SWITCH_SETTINGS_OFF_TRACK,
+                        true: SWITCH_SETTINGS_ON_TRACK,
+                      }}
+                      thumbColor={
+                        publishBetaEvents ? SWITCH_SETTINGS_THUMB_ON : SWITCH_SETTINGS_THUMB_OFF
+                      }
+                      {...(Platform.OS === 'web'
+                        ? { activeThumbColor: SWITCH_SETTINGS_THUMB_ON }
+                        : {})}
+                      ios_backgroundColor={SWITCH_SETTINGS_OFF_TRACK}
+                    />
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={[styles.bigCard, { backgroundColor: CARD }]}>
+                <View style={[styles.bigCardInner, styles.langCardRow]}>
+                  <View style={styles.globeBox}>
+                    <Ionicons name="globe-outline" size={24} color="#0284C7" />
+                  </View>
+                  <View style={styles.langTexts}>
+                    <Text style={styles.langTitle}>{t('profile.language')}</Text>
+                    <Text style={styles.langSub}>
+                      {!langEn ? t('profile.langFr') : t('profile.langEn')}
+                    </Text>
+                  </View>
+                  <View style={styles.langToggleRow}>
+                    <Text style={[styles.langToggleLbl, !langEn && styles.langToggleLblActive]}>FR</Text>
+                    <Switch
+                      accessibilityLabel={t('profile.language')}
+                      value={langEn}
+                      onValueChange={(useEn) => {
+                        setLangEn(useEn);
+                        void i18n.changeLanguage(useEn ? 'en' : 'fr');
+                      }}
+                      trackColor={{
+                        false: SWITCH_SETTINGS_OFF_TRACK,
+                        true: SWITCH_SETTINGS_ON_TRACK,
+                      }}
+                      thumbColor={langEn ? SWITCH_SETTINGS_THUMB_ON : SWITCH_SETTINGS_THUMB_OFF}
+                      {...(Platform.OS === 'web'
+                        ? { activeThumbColor: SWITCH_SETTINGS_THUMB_ON }
+                        : {})}
+                      ios_backgroundColor={SWITCH_SETTINGS_OFF_TRACK}
+                    />
+                    <Text style={[styles.langToggleLbl, langEn && styles.langToggleLblActive]}>EN</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={[styles.bigCard, { backgroundColor: CARD }]}>
+                <View style={[styles.bigCardInner, styles.langCardRow]}>
+                  <View style={styles.globeBox}>
+                    <Ionicons name="clipboard-outline" size={24} color="#A78BFA" />
+                  </View>
+                  <View style={styles.langTexts}>
+                    <Text style={styles.langTitle}>{t('profile.questionnaireToggleTitle')}</Text>
+                    <Text style={styles.langSub}>{t('profile.questionnaireToggleSub')}</Text>
+                  </View>
+                  <Switch
+                    accessibilityLabel={t('profile.questionnaireToggleTitle')}
+                    value={hideDailyQuestionnaire}
+                    onValueChange={setHideDailyQuestionnaire}
+                    trackColor={{
+                      false: SWITCH_SETTINGS_OFF_TRACK,
+                      true: SWITCH_SETTINGS_ON_TRACK,
+                    }}
+                    thumbColor={
+                      hideDailyQuestionnaire
+                        ? SWITCH_SETTINGS_THUMB_ON
+                        : SWITCH_SETTINGS_THUMB_OFF
+                    }
+                    {...(Platform.OS === 'web'
+                      ? { activeThumbColor: SWITCH_SETTINGS_THUMB_ON }
+                      : {})}
+                    ios_backgroundColor={SWITCH_SETTINGS_OFF_TRACK}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.sectionCard}>
+                <Text style={styles.sectionTitle}>{t('profile.sectionParams')}</Text>
+                <Row label={t('profile.maxParticipantsRow')} value={String(limits.maxParticipants)} />
+                <Row label={t('profile.maxRegistrationsRow')} value={String(limits.maxRegistrations)} />
+                <Row label={t('profile.maxFavoritesRow')} value={String(limits.maxFavorites)} />
+                <Row
+                  label={t('profile.maxActiveEventsRow')}
+                  value={limits.maxActiveEvents >= 999 ? '∞' : String(limits.maxActiveEvents)}
+                  last
+                />
+              </View>
+
+              <View style={styles.sectionCard}>
+                <Text style={[styles.sectionTitle, !isPremium && { color: '#F87171' }]}>
+                  {!isPremium
+                    ? t('profile.restrictionsFreeTitle')
+                    : t('profile.restrictionsControlTitle')}
+                </Text>
+                {RESTRICTION_ORDER.map((rowKey, i) => {
+                  return (
+                    <View
+                      key={rowKey}
+                      style={[
+                        styles.restrictionRow,
+                        i < RESTRICTION_ORDER.length - 1 && styles.restrictionBorder,
+                      ]}>
+                      <View style={{ flex: 1, paddingRight: 12 }}>
+                        <Text style={styles.restTitle}>
+                          {t(`profile.restrictions.${rowKey}.title` as const)}
+                        </Text>
+                        <Text style={styles.restSub}>
+                          {t(`profile.restrictions.${rowKey}.subtitle` as const)}
+                        </Text>
+                      </View>
+                      <Switch
+                        value={isPremium ? restrictions[rowKey] : true}
+                        onValueChange={() => {
+                          if (isPremium) toggleRestriction(rowKey);
+                        }}
+                        disabled={!isPremium}
+                        trackColor={
+                          !isPremium
+                            ? {
+                                false: SWITCH_RESTRICTION_DISABLED_TRACK,
+                                true: SWITCH_RESTRICTION_DISABLED_TRACK,
+                              }
+                            : restrictions[rowKey]
+                              ? {
+                                  false: SWITCH_RESTRICTION_OFF_TRACK,
+                                  true: SWITCH_RESTRICTION_ON_TRACK,
+                                }
+                              : {
+                                  false: SWITCH_RESTRICTION_OFF_TRACK,
+                                  true: SWITCH_RESTRICTION_OFF_TRACK,
+                                }
+                        }
+                        thumbColor={
+                          !isPremium || !restrictions[rowKey]
+                            ? SWITCH_RESTRICTION_THUMB_OFF_OR_DISABLED
+                            : SWITCH_RESTRICTION_THUMB_ON
+                        }
+                        {...(Platform.OS === 'web'
+                          ? {
+                              activeThumbColor: !isPremium
+                                ? SWITCH_RESTRICTION_THUMB_OFF_OR_DISABLED
+                                : restrictions[rowKey]
+                                  ? SWITCH_RESTRICTION_THUMB_ON
+                                  : SWITCH_RESTRICTION_THUMB_OFF_OR_DISABLED,
+                            }
+                          : {})}
+                        ios_backgroundColor={
+                          !isPremium
+                            ? SWITCH_RESTRICTION_DISABLED_TRACK
+                            : SWITCH_RESTRICTION_OFF_TRACK
+                        }
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+
+              <Pressable onPress={resetToCsvDefaults} style={styles.resetBtn}>
+                <Ionicons name="refresh" size={18} color="#EF4444" />
+                <Text style={styles.resetTxt}>{t('profile.resetSettings')}</Text>
+              </Pressable>
+
+              {isAdmin && (
+                <Pressable
+                  onPress={() => {
+                    cleanData();
+                    Alert.alert('Succès', 'Les données ont été nettoyées et vérifiées avec succès !');
+                  }}
+                  style={[styles.resetBtn, { backgroundColor: 'rgba(79, 70, 229, 0.1)', borderColor: '#4F46E5', marginTop: 12 }]}>
+                  <Ionicons name="color-wand" size={18} color="#4F46E5" />
+                  <Text style={[styles.resetTxt, { color: '#4F46E5' }]}>Nettoyer les données (Admin)</Text>
+                </Pressable>
+              )}
+
+              <Text style={styles.autoSave}>{t('profile.sessionNote')}</Text>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -949,6 +1151,24 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: Design.bg,
+  },
+  settingsModalRoot: {
+    flex: 1,
+    backgroundColor: Design.bg,
+  },
+  settingsModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
+  },
+  settingsModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Design.textPrimary,
   },
   heroTopBar: {
     position: 'absolute',
@@ -1144,6 +1364,67 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 6,
     paddingHorizontal: 2,
+  },
+  notificationsIntro: {
+    color: Design.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 6,
+    paddingHorizontal: 2,
+  },
+  markAllReadBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(90,200,250,0.18)',
+    marginBottom: 4,
+  },
+  markAllReadTxt: {
+    color: '#5AC8FA',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  notificationCard: {
+    backgroundColor: CARD,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: BORDER,
+  },
+  notificationCardUnread: {
+    borderColor: 'rgba(90,200,250,0.45)',
+    backgroundColor: 'rgba(90,200,250,0.06)',
+  },
+  notificationTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 6,
+  },
+  notificationTitle: {
+    color: Design.textPrimary,
+    fontSize: 16,
+    fontWeight: '800',
+    flex: 1,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#5AC8FA',
+  },
+  notificationBody: {
+    color: Design.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  notificationWhen: {
+    color: Design.textSecondary,
+    fontSize: 12,
+    marginTop: 8,
+    opacity: 0.85,
   },
   reportCard: {
     flexDirection: 'row',
