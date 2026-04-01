@@ -7,6 +7,7 @@ import { useModeration } from '@/context/ModerationContext';
 import { useProfileSettings, type RestrictionKey } from '@/context/ProfileSettingsContext';
 import { useMessaging } from '@/context/MessagingContext';
 import type { ProfileFriendRow, ProfileMeRow } from '@/data/mockDataLoader';
+import { uploadLocalImageToImageKit } from '@/lib/imagekitUpload';
 import { getUsersFriends, getUsersMe } from '@/services/dataApi';
 import { todayDateKey } from '@/lib/todayDateKey';
 import type { Event } from '@/types/messaging';
@@ -17,7 +18,9 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -113,6 +116,7 @@ export default function ProfileScreen() {
   const [tab, setTab] = useState<TabId>('favorites');
   const [meCsv, setMeCsv] = useState<ProfileMeRow | null>(null);
   const [friendsCsv, setFriendsCsv] = useState<ProfileFriendRow[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -159,6 +163,8 @@ export default function ProfileScreen() {
   };
 
   const pickAvatar = async () => {
+    const userKey = meCsv?.userKey;
+    if (!userKey) return;
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(t('profile.photoPermissionTitle'), t('profile.photoPermissionBody'));
@@ -170,8 +176,29 @@ export default function ProfileScreen() {
       aspect: [4, 3],
       quality: 0.85,
     });
-    if (!result.canceled && result.assets[0]?.uri) {
-      setAvatarUri(result.assets[0].uri);
+    const asset = result.assets?.[0];
+    if (result.canceled || !asset?.uri) return;
+
+    if (__DEV__) {
+      // Le POST ImageKit ne part qu’ici, après validation d’une image (pas au seul tap sur l’icône).
+      // eslint-disable-next-line no-console
+      console.log('[Profile] Upload avatar → ImageKit…', Platform.OS, asset.uri.slice(0, 60));
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadLocalImageToImageKit({
+        localUri: asset.uri,
+        mimeType: asset.mimeType ?? null,
+        userKey,
+      });
+      setAvatarUri(url);
+      setMeCsv(await getUsersMe());
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert(t('profile.uploadErrorTitle'), msg || t('profile.uploadErrorBody'));
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -257,9 +284,18 @@ export default function ProfileScreen() {
             <View style={{ flex: 1 }} />
             <Pressable
               onPress={pickAvatar}
+              disabled={uploadingPhoto}
               accessibilityLabel={t('profile.changePhoto')}
-              style={({ pressed }) => [styles.heroIconBtn, pressed && { opacity: 0.75 }]}>
-              <Ionicons name="camera" size={22} color="#fff" />
+              style={({ pressed }) => [
+                styles.heroIconBtn,
+                pressed && !uploadingPhoto && { opacity: 0.75 },
+                uploadingPhoto && { opacity: 0.6 },
+              ]}>
+              {uploadingPhoto ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Ionicons name="camera" size={22} color="#fff" />
+              )}
             </Pressable>
           </View>
           <View style={styles.heroBottom}>

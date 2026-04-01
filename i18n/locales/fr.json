@@ -115,6 +115,8 @@
     "badgesSection": "Badges",
     "photoPermissionTitle": "Accès photos",
     "photoPermissionBody": "Autorisez l’accès à la galerie pour changer votre photo.",
+    "uploadErrorTitle": "Envoi de la photo impossible",
+    "uploadErrorBody": "Vérifiez votre connexion et la configuration ImageKit (.env).",
     "badgeLabels": {
       "listening": "À l’écoute",
       "kind": "Bienveillant",

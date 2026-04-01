@@ -169,6 +169,8 @@ function parseProfileVisits(anchor: number): MockProfileVisit[] {
 }
 
 export type ProfileMeRow = {
+  /** Identifiant stable du compte (CSV `current_user.userKey`, ex. `me`, `u_42`). */
+  userKey: string;
   displayName: string;
   avatarUrl: string;
   memberSince: string;
@@ -198,6 +200,7 @@ function parseProfileMe(): ProfileMeRow {
   const r = parseCsv(csvEmbedded.current_user)[0];
   if (!r) {
     return {
+      userKey: 'me',
       displayName: 'Thomas R.',
       avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=800',
       memberSince: '2024',
@@ -207,6 +210,7 @@ function parseProfileMe(): ProfileMeRow {
     };
   }
   return {
+    userKey: (r.userKey ?? 'me').trim() || 'me',
     displayName: r.displayName,
     avatarUrl: r.avatarUrl,
     memberSince: r.memberSince,

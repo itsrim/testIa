@@ -16,6 +16,7 @@
  * | GET     | /users/me/identity                | getUsersMeIdentity |
  * | PUT     | /users/me/identity                | putUsersMeIdentity |
  * | DELETE  | /users/me/identity                | deleteUsersMeIdentity |
+ * | (local) | miroir `current_user`             | AsyncStorage `@testia_mirror_current_user_csv_v1` (URL ImageKit après upload) |
  * | GET     | /settings/limits                  | getSettingsLimits |
  * | GET     | /settings/session                 | getSessionProfileSettings |
  * | PUT     | /settings/session                 | putSessionProfileSettings |
@@ -56,6 +57,7 @@ import type {
   Message,
 } from '@/types/messaging';
 import { parseEventsCsvMirror, serializeEventsCsvMirror } from '@/lib/eventsCsvMirror';
+import { csvBool, csvNum, parseCsv } from '@/data/parseCsv';
 import {
   appendLineToQuestionnaireCsv,
   escapeCsvField,
@@ -71,6 +73,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // --- Stockage local AsyncStorage (contenu CSV en texte = « base » locale) ---
 
 const STORAGE_PROFILE_IDENTITY = '@testia_profile_identity_v1';
+/** Miroir CSV `current_user` (ligne données) — mis à jour avec l’URL ImageKit après upload. */
+const STORAGE_CURRENT_USER_CSV_MIRROR = '@testia_mirror_current_user_csv_v1';
 /** Ancienne persistance événements JSON (migrée une fois vers CSV texte). */
 const STORAGE_EVENTS_LEGACY_JSON = 'events_data';
 /** Événements : une chaîne CSV complète (même schéma que `events.csv` + colonnes miroir). */
@@ -157,9 +161,82 @@ function mergeIdentityFromStorage(
   };
 }
 
-/** GET /users/me — ligne courante (CSV seed). */
+async function mergeMeFromIdentityIfNeeded(base: ProfileMeRow): Promise<ProfileMeRow> {
+  try {
+    const idRaw = await AsyncStorage.getItem(STORAGE_PROFILE_IDENTITY);
+    if (!idRaw) return base;
+    const id = JSON.parse(idRaw) as Partial<ProfileIdentityState>;
+    const displayName =
+      typeof id.displayName === 'string' && id.displayName.trim()
+        ? id.displayName.trim()
+        : base.displayName;
+    const avatarUrl =
+      typeof id.avatarUri === 'string' && id.avatarUri.startsWith('http')
+        ? id.avatarUri
+        : base.avatarUrl;
+    if (avatarUrl === base.avatarUrl && displayName === base.displayName) return base;
+    return { ...base, userKey: base.userKey, displayName, avatarUrl };
+  } catch {
+    return base;
+  }
+}
+
+async function persistCurrentUserCsvMirror(identity: ProfileIdentityState): Promise<void> {
+  const base = profileMe;
+  const displayName = identity.displayName.trim() || base.displayName;
+  const avatarUrl = identity.avatarUri.startsWith('http')
+    ? identity.avatarUri
+    : base.avatarUrl;
+  const row: ProfileMeRow = {
+    ...base,
+    displayName,
+    avatarUrl,
+  };
+  const header =
+    'userKey,displayName,avatarUrl,memberSince,reliabilityScore,isPremiumSeed,isAdminSeed';
+  const line = [
+    escapeCsvField(row.userKey),
+    escapeCsvField(row.displayName),
+    escapeCsvField(row.avatarUrl),
+    escapeCsvField(row.memberSince),
+    escapeCsvField(String(row.reliabilityScore)),
+    escapeCsvField(row.isPremiumSeed ? '1' : '0'),
+    escapeCsvField(row.isAdminSeed ? '1' : '0'),
+  ].join(',');
+  await AsyncStorage.setItem(STORAGE_CURRENT_USER_CSV_MIRROR, `${header}\n${line}\n`);
+}
+
+/** GET /users/me — seed CSV + miroir local (avatar / nom après sync identité). */
 export async function getUsersMe(): Promise<ProfileMeRow> {
-  return profileMe;
+  const base = profileMe;
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_CURRENT_USER_CSV_MIRROR);
+    if (raw?.trim()) {
+      const rows = parseCsv(raw);
+      const r = rows[0];
+      if (r) {
+        const userKey = (r.userKey ?? '').trim() || base.userKey;
+        return {
+          userKey,
+          displayName: (r.displayName ?? '').trim() || base.displayName,
+          avatarUrl: (r.avatarUrl ?? '').trim() || base.avatarUrl,
+          memberSince: (r.memberSince ?? '').trim() || base.memberSince,
+          reliabilityScore: csvNum(r.reliabilityScore ?? '', base.reliabilityScore),
+          isPremiumSeed:
+            r.isPremiumSeed !== undefined && String(r.isPremiumSeed).trim() !== ''
+              ? csvBool(String(r.isPremiumSeed))
+              : base.isPremiumSeed,
+          isAdminSeed:
+            r.isAdminSeed !== undefined && String(r.isAdminSeed).trim() !== ''
+              ? csvBool(String(r.isAdminSeed))
+              : base.isAdminSeed,
+        };
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return mergeMeFromIdentityIfNeeded(base);
 }
 
 /** GET /users/me/friends */
@@ -183,12 +260,14 @@ export async function getUsersMeIdentity(): Promise<ProfileIdentityState> {
 /** PUT /users/me/identity */
 export async function putUsersMeIdentity(next: ProfileIdentityState): Promise<void> {
   await AsyncStorage.setItem(STORAGE_PROFILE_IDENTITY, JSON.stringify(next));
+  await persistCurrentUserCsvMirror(next);
 }
 
 /** DELETE /users/me/identity — réinitialise le stockage aux défauts CSV. */
 export async function deleteUsersMeIdentity(): Promise<void> {
   const n = seedIdentityFromCsv();
   await AsyncStorage.setItem(STORAGE_PROFILE_IDENTITY, JSON.stringify(n));
+  await AsyncStorage.removeItem(STORAGE_CURRENT_USER_CSV_MIRROR);
 }
 
 // --- Paramètres session (premium, admin, restrictions) ---

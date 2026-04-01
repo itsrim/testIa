@@ -115,6 +115,8 @@
     "badgesSection": "Badges",
     "photoPermissionTitle": "Photo access",
     "photoPermissionBody": "Allow gallery access to change your photo.",
+    "uploadErrorTitle": "Could not upload photo",
+    "uploadErrorBody": "Check your connection and ImageKit configuration (.env).",
     "badgeLabels": {
       "listening": "Good listener",
       "kind": "Kind",
